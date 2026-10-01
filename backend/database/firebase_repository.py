@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 # Default seed data (rooms & devices) — used when Firestore is empty
 # ---------------------------------------------------------------------------
 _DEFAULT_ROOMS = [
+    {"id": "main_panel",   "name": "Main Panel",   "floor": 1, "icon": "zap"},
     {"id": "living_room",  "name": "Living Room",  "floor": 1, "icon": "sofa"},
     {"id": "bedroom_1",    "name": "Bedroom 1",    "floor": 1, "icon": "bed"},
     {"id": "bedroom_2",    "name": "Bedroom 2",    "floor": 2, "icon": "bed"},
@@ -26,16 +27,10 @@ _DEFAULT_ROOMS = [
 ]
 
 _DEFAULT_DEVICES = [
-    {"device_id": "ac_living_room",    "name": "AC Living Room",    "room_id": "living_room", "rated_power": 1200.0, "status": 0, "category": "heavy_load"},
-    {"device_id": "fridge",            "name": "Refrigerator",      "room_id": "kitchen",     "rated_power": 150.0,  "status": 1, "category": "heavy_load"},
-    {"device_id": "tv_living_room",    "name": "TV",                "room_id": "living_room", "rated_power": 100.0,  "status": 0, "category": "receptacle"},
-    {"device_id": "washing_machine",   "name": "Washing Machine",   "room_id": "garage",      "rated_power": 600.0,  "status": 0, "category": "heavy_load"},
-    {"device_id": "water_heater",      "name": "Water Heater",      "room_id": "bathroom",    "rated_power": 3000.0, "status": 0, "category": "heavy_load"},
-    {"device_id": "lighting_living",   "name": "Living Room Lights","room_id": "living_room", "rated_power": 80.0,   "status": 0, "category": "lighting"},
-    {"device_id": "lighting_bedroom1", "name": "Bedroom 1 Lights",  "room_id": "bedroom_1",   "rated_power": 60.0,   "status": 0, "category": "lighting"},
-    {"device_id": "computer_desk",     "name": "Desktop Computer",  "room_id": "bedroom_1",   "rated_power": 250.0,  "status": 0, "category": "receptacle"},
-    {"device_id": "microwave",         "name": "Microwave",         "room_id": "kitchen",     "rated_power": 1000.0, "status": 0, "category": "receptacle"},
-    {"device_id": "ev_charger",        "name": "EV Charger",        "room_id": "garage",      "rated_power": 7000.0, "status": 0, "category": "heavy_load"},
+    {"device_id": "circuit_lighting",  "name": "วงจรแสงสว่าง (Lighting)",  "room_id": "main_panel", "rated_power": 800.0, "status": 0, "category": "lighting"},
+    {"device_id": "circuit_receptacle","name": "วงจรเต้ารับ (Receptacle)", "room_id": "main_panel", "rated_power": 2000.0,"status": 0, "category": "receptacle"},
+    {"device_id": "circuit_heavy_load","name": "โหลดหนัก (Heavy Load)",    "room_id": "main_panel", "rated_power": 5000.0,"status": 0, "category": "heavy_load"},
+    {"device_id": "circuit_solar",     "name": "Solar PV (On-Grid)",       "room_id": "main_panel", "rated_power": -5000.0,"status": 0,"category": "solar"},
 ]
 
 
@@ -122,6 +117,19 @@ class FirebaseRepository:
             self._seeded = True
         except Exception as e:
             logger.warning(f"[Firebase] Seed failed (non-fatal): {e}")
+
+    def clear_and_reseed(self):
+        """Clear all devices, rooms, and readings, then reseed."""
+        try:
+            logger.info("[Firebase] Clearing all data for reseed...")
+            self._delete_collection("rooms")
+            self._delete_collection("devices")
+            self._delete_collection("energy_readings")
+            self._seeded = False
+            self.seed_if_empty()
+            logger.info("[Firebase] Clear and reseed complete.")
+        except Exception as e:
+            logger.error(f"[Firebase] Clear and reseed failed: {e}")
 
     # ------------------------------------------------------------------
     # Rooms
