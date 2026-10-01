@@ -128,8 +128,9 @@ class FirebaseRepository:
     # ------------------------------------------------------------------
     def get_rooms(self) -> List[Dict[str, Any]]:
         db = self._client()
-        docs = db.collection("rooms").order_by("floor").order_by("name").stream()
-        return [doc.to_dict() for doc in docs]
+        docs = db.collection("rooms").stream()
+        rooms = [doc.to_dict() for doc in docs]
+        return sorted(rooms, key=lambda r: (r.get("floor", 0), r.get("name", "")))
 
     # ------------------------------------------------------------------
     # Devices
@@ -235,12 +236,13 @@ class FirebaseRepository:
         db = self._client()
         col = db.collection("energy_readings")
         query = col.where("timestamp", ">=", start_time).where("timestamp", "<=", end_time)
-        if device_id:
-            query = query.where("device_id", "==", device_id)
-        query = query.order_by("timestamp")
-
         docs = list(query.stream())
         rows = [doc.to_dict() for doc in docs]
+        
+        if device_id:
+            rows = [r for r in rows if r.get("device_id") == device_id]
+            
+        rows.sort(key=lambda x: x.get("timestamp", ""))
 
         if not device_id and rows:
             # Aggregate by timestamp (group all devices by timestamp minute)
@@ -272,18 +274,24 @@ class FirebaseRepository:
         rooms = {r["id"]: r["name"] for r in self.get_rooms()}
         results = []
 
+        from datetime import datetime, timedelta, timezone
+        now = datetime.now(timezone.utc)
+        start_time = (now - timedelta(minutes=30)).strftime("%Y-%m-%d %H:%M:%S")
+        
+        query = db.collection("energy_readings").where("timestamp", ">=", start_time)
+        readings = [doc.to_dict() for doc in query.stream()]
+        readings.sort(key=lambda x: x.get("timestamp", ""))
+        
+        latest_map = {}
+        for r in readings:
+            dev_id = r.get("device_id")
+            if dev_id:
+                latest_map[dev_id] = r
+
         for dev in devices:
             dev_id = dev["device_id"]
-            docs = (
-                db.collection("energy_readings")
-                .where("device_id", "==", dev_id)
-                .order_by("timestamp", direction="DESCENDING")
-                .limit(1)
-                .stream()
-            )
-            doc_list = list(docs)
-            if doc_list:
-                r = doc_list[0].to_dict()
+            if dev_id in latest_map:
+                r = latest_map[dev_id]
                 r["device_name"] = dev.get("name", dev_id)
                 r["room_id"] = dev.get("room_id", "")
                 r["room_name"] = rooms.get(dev.get("room_id", ""), "Unknown")
@@ -291,9 +299,8 @@ class FirebaseRepository:
                 r["category"] = dev.get("category", "general")
                 results.append(r)
             else:
-                # Device exists but has no readings — return zeros
                 results.append({
-                    "timestamp":   _ts_now(),
+                    "timestamp":   "",
                     "device_id":   dev_id,
                     "device_name": dev.get("name", dev_id),
                     "room_id":     dev.get("room_id", ""),
