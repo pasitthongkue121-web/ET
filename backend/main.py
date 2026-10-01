@@ -73,7 +73,7 @@ def on_startup():
         logger.info("🔥 Firebase mode enabled — initialising Firestore repository…")
         from backend.database.firebase_repository import get_firebase_repository
         repo = get_firebase_repository()
-        repo.seed_if_empty()
+        repo.clear_and_reseed()
         
         # Seed 24h of historical data if Firebase is empty
         from backend.services.esp32_simulator_service import esp32_simulator
