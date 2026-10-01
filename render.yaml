@@ -1,0 +1,27 @@
+services:
+  - type: web
+    name: energy-twins-backend
+    env: python
+    region: singapore
+    plan: free
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: uvicorn backend.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: USE_FIREBASE
+        value: "true"
+      - key: ENABLE_ESP32_SIM
+        value: "true"
+      - key: FIREBASE_PROJECT_ID
+        sync: false
+      - key: FIREBASE_CREDENTIALS_JSON
+        sync: false
+      - key: ENERGY_ELECTRICITY_RATE
+        value: "4.42"
+      - key: ENERGY_CO2_FACTOR
+        value: "0.4999"
+      - key: ENERGY_PEAK_THRESHOLD
+        value: "1500.0"
+      - key: PYTHONUNBUFFERED
+        value: "1"

@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: energy_twins_backend
+    ports:
+      - "8000:8000"
+    environment:
+      - ENERGY_ELECTRICITY_RATE=4.42
+      - ENERGY_CO2_FACTOR=0.4999
+      - ENERGY_PEAK_THRESHOLD=1500.0
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: energy_twins_frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - INTERNAL_BACKEND_URL=http://backend:8000
+    depends_on:
+      - backend
+    restart: unless-stopped

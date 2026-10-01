@@ -1,0 +1,741 @@
+'use client';
+
+import React, { useState, useEffect, useCallback } from 'react';
+import Navbar from '../../components/Navbar';
+import {
+  Zap,
+  Activity,
+  Cpu,
+  RefreshCw,
+  CheckCircle,
+  AlertCircle,
+  Layers,
+  BatteryCharging,
+  Sliders,
+  DollarSign,
+  TrendingUp,
+  Clock,
+  Lightbulb,
+  ShieldCheck,
+  Wind
+} from '../../components/Icons';
+import {
+  getTOUStatus,
+  getTOUCircuits,
+  runTOUSimulation,
+  TOUStatusResponse,
+  CircuitsResponse,
+  TOUSimulateResponse,
+  TOUSimulateRequest
+} from '../../lib/api';
+
+export default function TOUCalculatorPage() {
+  const [touStatus, setTouStatus] = useState<TOUStatusResponse | null>(null);
+  const [circuits, setCircuits] = useState<CircuitsResponse | null>(null);
+  const [simResult, setSimResult] = useState<TOUSimulateResponse | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [simulating, setSimulating] = useState<boolean>(false);
+  const [notice, setNotice] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
+
+  // Simulation controls state
+  const [solarMode, setSolarMode] = useState<'none' | 'ongrid' | 'hybrid'>('hybrid');
+  const [solarCapacityKw, setSolarCapacityKw] = useState<number>(5.0);
+  const [batteryCapacityKwh, setBatteryCapacityKwh] = useState<number>(10.0);
+  const [evEnabled, setEvEnabled] = useState<boolean>(true);
+  const [evChargerKw, setEvChargerKw] = useState<number>(7.4);
+  const [evTargetKwh, setEvTargetKwh] = useState<number>(30.0);
+  const [evMode, setEvMode] = useState<'immediate' | 'smart_offpeak' | 'solar_surplus'>('smart_offpeak');
+
+  const showNotice = (type: 'ok' | 'err', text: string) => {
+    setNotice({ type, text });
+    setTimeout(() => setNotice(null), 6000);
+  };
+
+  const loadData = useCallback(async () => {
+    try {
+      const [statusRes, circuitsRes] = await Promise.all([
+        getTOUStatus(),
+        getTOUCircuits(),
+      ]);
+      setTouStatus(statusRes);
+      setCircuits(circuitsRes);
+    } catch {
+      showNotice('err', 'ไม่สามารถเชื่อมต่อกับระบบคำนวณ TOU ได้');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const executeSimulation = useCallback(async () => {
+    setSimulating(true);
+    try {
+      const req: TOUSimulateRequest = {
+        solar_mode: solarMode,
+        solar_capacity_kw: solarCapacityKw,
+        battery_capacity_kwh: batteryCapacityKwh,
+        battery_dod_pct: 90.0,
+        ev_enabled: evEnabled,
+        ev_charger_kw: evChargerKw,
+        ev_target_kwh: evTargetKwh,
+        ev_mode: evMode,
+      };
+      const res = await runTOUSimulation(req);
+      setSimResult(res);
+    } catch {
+      showNotice('err', 'การจำลองพลังงาน TOU & Solar & EV ล้มเหลว');
+    } finally {
+      setSimulating(false);
+    }
+  }, [solarMode, solarCapacityKw, batteryCapacityKwh, evEnabled, evChargerKw, evTargetKwh, evMode]);
+
+  useEffect(() => {
+    loadData();
+    executeSimulation();
+    const timer = setInterval(loadData, 30000);
+    return () => clearInterval(timer);
+  }, [loadData, executeSimulation]);
+
+  return (
+    <div className="min-h-screen bg-[#070b19] text-slate-100 pb-16">
+      <Navbar isBackendOnline={true} />
+
+      <main className="mx-auto max-w-7xl px-4 py-6 space-y-6">
+
+        {/* ─── Header & Realtime TOU Banner ──────────────────────────── */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800/80 pb-5">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-tr from-amber-500 to-rose-600 shadow-md shadow-amber-500/20">
+                <BatteryCharging className="h-5 w-5 text-white" />
+              </span>
+              <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white">
+                TOU Smart Meter & Multi-Circuit Energy System
+              </h1>
+            </div>
+            <p className="mt-1 text-xs sm:text-sm text-slate-400">
+              การคำนวณมิเตอร์ TOU (On-Peak / Off-Peak) · จำแนก 3 กลุ่มวงจรโหลดบ้าน · ระบบโซลาร์เซลล์ On-Grid / Hybrid BESS · การชาร์จรถยนต์ไฟฟ้า EV
+            </p>
+          </div>
+
+          <div className="flex items-center gap-3">
+            {/* Live TOU Indicator */}
+            {touStatus && (
+              <div className={`flex items-center gap-3 rounded-2xl border px-4 py-2.5 shadow-lg ${
+                touStatus.is_on_peak
+                  ? 'border-rose-500/40 bg-rose-950/40 shadow-rose-900/20'
+                  : 'border-emerald-500/40 bg-emerald-950/40 shadow-emerald-900/20'
+              }`}>
+                <div className={`h-3.5 w-3.5 rounded-full ${
+                  touStatus.is_on_peak ? 'bg-rose-500 animate-pulse' : 'bg-emerald-500 animate-pulse'
+                }`} />
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-xs font-black uppercase tracking-wider ${
+                      touStatus.is_on_peak ? 'text-rose-400' : 'text-emerald-400'
+                    }`}>
+                      {touStatus.is_on_peak ? '🔴 ON-PEAK' : '🟢 OFF-PEAK'}
+                    </span>
+                    <span className="text-base font-black text-white">
+                      ฿{touStatus.current_rate_thb.toFixed(2)}
+                      <span className="text-[11px] font-normal text-slate-400"> / kWh</span>
+                    </span>
+                  </div>
+                  <div className="text-[10px] text-slate-400">
+                    อีก {touStatus.hours_to_next} ชม. สลับเป็น {touStatus.next_period}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <button
+              onClick={() => { loadData(); executeSimulation(); }}
+              className="flex items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-900/80 px-3.5 py-2.5 text-xs font-semibold text-slate-300 hover:bg-slate-800 transition"
+            >
+              <RefreshCw className="h-4 w-4" />
+              รีเฟรช
+            </button>
+          </div>
+        </div>
+
+        {/* ─── TOU Rate Legend / Explainer Strip ──────────────────────── */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="rounded-xl border border-rose-500/20 bg-rose-950/15 p-3 flex items-start gap-3">
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-rose-500/20 text-rose-400 text-sm font-bold flex-shrink-0">
+              🔴
+            </span>
+            <div>
+              <div className="text-xs font-bold text-rose-300">ช่วง On-Peak: 5.80 บาท/หน่วย</div>
+              <div className="text-[11px] text-slate-400 mt-0.5">วันจันทร์ - ศุกร์ (09:00 - 22:00 น.) ความต้องการใช้ไฟสูง</div>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-emerald-500/20 bg-emerald-950/15 p-3 flex items-start gap-3">
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-500/20 text-emerald-400 text-sm font-bold flex-shrink-0">
+              🟢
+            </span>
+            <div>
+              <div className="text-xs font-bold text-emerald-300">ช่วง Off-Peak: 2.64 บาท/หน่วย</div>
+              <div className="text-[11px] text-slate-400 mt-0.5">วันจันทร์ - ศุกร์ (22:00 - 09:00 น.) และ เสาร์-อาทิตย์ ตลอด 24 ชม.</div>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-blue-500/20 bg-blue-950/15 p-3 flex items-start gap-3">
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-500/20 text-blue-400 text-sm font-bold flex-shrink-0">
+              ⚡
+            </span>
+            <div>
+              <div className="text-xs font-bold text-blue-300">มิเตอร์ปกติ (Flat Rate): 4.42 บาท</div>
+              <div className="text-[11px] text-slate-400 mt-0.5">อัตราก้าวหน้าเฉลี่ยทั่วไป ไม่แยกช่วงเวลา</div>
+            </div>
+          </div>
+        </div>
+
+        {/* ─── Notification ───────────────────────────────────────────── */}
+        {notice && (
+          <div className={`flex items-center gap-3 rounded-xl border px-4 py-3 text-xs ${
+            notice.type === 'ok'
+              ? 'border-emerald-500/30 bg-emerald-950/30 text-emerald-300'
+              : 'border-rose-500/30 bg-rose-950/30 text-rose-300'
+          }`}>
+            {notice.type === 'ok' ? <CheckCircle className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
+            {notice.text}
+          </div>
+        )}
+
+        {/* ════════════════════════════════════════════════════════════════
+            SECTION 1: 3 LOAD CIRCUIT CLASSIFICATION CARDS
+           ════════════════════════════════════════════════════════════════ */}
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <Layers className="h-4 w-4 text-emerald-400" />
+              <h2 className="text-base font-bold text-white">จำแนกโหลดไฟบ้าน 3 กลุ่มวงจร (Household Circuits)</h2>
+            </div>
+            <span className="text-xs text-slate-400">วัดค่าวาล์วพลังงานแยกตามตู้เมน (Consumer Unit)</span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Circuit 1: Lighting */}
+            <div className="rounded-2xl border border-amber-500/20 bg-gradient-to-b from-amber-950/10 to-slate-900/60 p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400">
+                    <Lightbulb className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-bold text-amber-300 uppercase tracking-wide">1. วงจรแสงสว่าง</h3>
+                    <p className="text-[11px] text-slate-400">Lighting Circuits</p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="text-base font-black text-amber-400 font-mono">
+                    {circuits?.lighting.total_power_w.toFixed(0) || 0} W
+                  </div>
+                  <div className="text-[10px] text-slate-500">Rated {circuits?.lighting.rated_power_w.toFixed(0) || 0}W</div>
+                </div>
+              </div>
+
+              <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-amber-400 transition-all"
+                  style={{
+                    width: `${Math.min(100, ((circuits?.lighting.total_power_w || 0) / Math.max(1, circuits?.lighting.rated_power_w || 1)) * 100)}%`
+                  }}
+                />
+              </div>
+
+              <div className="space-y-1.5 pt-1">
+                {circuits?.lighting.devices.map(d => (
+                  <div key={d.device_id} className="flex items-center justify-between text-[11px] bg-slate-950/60 px-2.5 py-1.5 rounded-lg border border-slate-800/80">
+                    <span className="text-slate-300 truncate max-w-[170px]">{d.name}</span>
+                    <span className="font-mono text-slate-400">{d.current_power_w.toFixed(0)}W</span>
+                  </div>
+                ))}
+              </div>
+              <p className="text-[10px] text-slate-500 italic">หลอดไฟ LED, โคมไฟห้องนั่งเล่น, โคมไฟห้องนอน</p>
+            </div>
+
+            {/* Circuit 2: Receptacle / General Power */}
+            <div className="rounded-2xl border border-sky-500/20 bg-gradient-to-b from-sky-950/10 to-slate-900/60 p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-sky-500/10 border border-sky-500/20 text-sky-400">
+                    <Zap className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-bold text-sky-300 uppercase tracking-wide">2. วงจรเต้ารับและกำลัง</h3>
+                    <p className="text-[11px] text-slate-400">Receptacle & Appliances</p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="text-base font-black text-sky-400 font-mono">
+                    {circuits?.receptacle.total_power_w.toFixed(0) || 0} W
+                  </div>
+                  <div className="text-[10px] text-slate-500">Rated {circuits?.receptacle.rated_power_w.toFixed(0) || 0}W</div>
+                </div>
+              </div>
+
+              <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-sky-400 transition-all"
+                  style={{
+                    width: `${Math.min(100, ((circuits?.receptacle.total_power_w || 0) / Math.max(1, circuits?.receptacle.rated_power_w || 1)) * 100)}%`
+                  }}
+                />
+              </div>
+
+              <div className="space-y-1.5 pt-1 max-h-40 overflow-y-auto pr-1">
+                {circuits?.receptacle.devices.slice(0, 4).map(d => (
+                  <div key={d.device_id} className="flex items-center justify-between text-[11px] bg-slate-950/60 px-2.5 py-1.5 rounded-lg border border-slate-800/80">
+                    <span className="text-slate-300 truncate max-w-[170px]">{d.name}</span>
+                    <span className="font-mono text-slate-400">{d.current_power_w.toFixed(0)}W</span>
+                  </div>
+                ))}
+              </div>
+              <p className="text-[10px] text-slate-500 italic">ตู้เย็น (ทำงาน 24 ชม.), คอมพิวเตอร์, สมาร์ททีวี, ไมโครเวฟ</p>
+            </div>
+
+            {/* Circuit 3: Heavy Load */}
+            <div className="rounded-2xl border border-rose-500/20 bg-gradient-to-b from-rose-950/10 to-slate-900/60 p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-400">
+                    <Wind className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-bold text-rose-300 uppercase tracking-wide">3. วงจรโหลดหนัก</h3>
+                    <p className="text-[11px] text-slate-400">Heavy Load (Peak Consumer)</p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="text-base font-black text-rose-400 font-mono">
+                    {circuits?.heavy_load.total_power_w.toFixed(0) || 0} W
+                  </div>
+                  <div className="text-[10px] text-slate-500">Rated {circuits?.heavy_load.rated_power_w.toFixed(0) || 0}W</div>
+                </div>
+              </div>
+
+              <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-rose-500 transition-all"
+                  style={{
+                    width: `${Math.min(100, ((circuits?.heavy_load.total_power_w || 0) / Math.max(1, circuits?.heavy_load.rated_power_w || 1)) * 100)}%`
+                  }}
+                />
+              </div>
+
+              <div className="space-y-1.5 pt-1 max-h-40 overflow-y-auto pr-1">
+                {circuits?.heavy_load.devices.map(d => (
+                  <div key={d.device_id} className="flex items-center justify-between text-[11px] bg-slate-950/60 px-2.5 py-1.5 rounded-lg border border-slate-800/80">
+                    <span className="text-slate-300 truncate max-w-[170px]">{d.name}</span>
+                    <span className="font-mono text-rose-300">{d.current_power_w.toFixed(0)}W</span>
+                  </div>
+                ))}
+              </div>
+              <p className="text-[10px] text-slate-500 italic">แอร์ห้องนั่งเล่น/นอน, เครื่องทำน้ำอุ่น (3.5kW), ปั๊มน้ำ (750W)</p>
+            </div>
+          </div>
+        </div>
+
+        {/* ════════════════════════════════════════════════════════════════
+            SECTION 2 & 3: SOLAR ROOFTOP & EV CHARGING CONTROLS
+           ════════════════════════════════════════════════════════════════ */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          {/* Solar Rooftop Box */}
+          <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-5 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2">
+                <span className="text-lg">☀️</span>
+                <h3 className="text-sm font-bold text-white">ระบบโซลาร์เซลล์ (Solar Rooftop)</h3>
+              </div>
+              <span className="text-[11px] text-amber-400 font-semibold">On-Grid & Hybrid BESS</span>
+            </div>
+
+            {/* Solar Mode Toggle */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-slate-300">รูปแบบระบบโซลาร์:</label>
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { id: 'none', label: '🚫 ปิดการใช้งาน', desc: 'ไม่ติดตั้งโซลาร์' },
+                  { id: 'ongrid', label: '☀️ On-Grid', desc: 'จ่ายตรงลดไฟกลางวัน' },
+                  { id: 'hybrid', label: '🔋 Hybrid + BESS', desc: 'มีแบตคอย Peak Shaving' },
+                ].map(mode => (
+                  <button
+                    key={mode.id}
+                    onClick={() => setSolarMode(mode.id as any)}
+                    className={`p-2.5 rounded-xl text-left transition border ${
+                      solarMode === mode.id
+                        ? 'border-amber-500 bg-amber-500/10 text-white shadow-sm'
+                        : 'border-slate-800 bg-slate-950/60 text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    <div className="text-xs font-bold">{mode.label}</div>
+                    <div className="text-[10px] text-slate-500 mt-0.5">{mode.desc}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {solarMode !== 'none' && (
+              <div className="space-y-3 pt-2">
+                {/* Solar Size Slider */}
+                <div>
+                  <div className="flex justify-between text-xs text-slate-300 mb-1">
+                    <span>ขนาดกำลังผลิตแผงโซลาร์:</span>
+                    <span className="font-bold text-amber-400 font-mono">{solarCapacityKw} kWp</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="1.0"
+                    max="15.0"
+                    step="0.5"
+                    value={solarCapacityKw}
+                    onChange={e => setSolarCapacityKw(parseFloat(e.target.value))}
+                    className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-amber-500"
+                  />
+                  <div className="flex justify-between text-[10px] text-slate-500 mt-0.5">
+                    <span>1 kWp (ประหยัด ~500บ.)</span>
+                    <span>5 kWp (บ้านทั่วไป)</span>
+                    <span>15 kWp (บ้านใหญ่)</span>
+                  </div>
+                </div>
+
+                {/* Battery Size Slider (Only when Hybrid) */}
+                {solarMode === 'hybrid' && (
+                  <div className="rounded-xl border border-emerald-500/20 bg-emerald-950/15 p-3 space-y-2">
+                    <div className="flex justify-between text-xs text-emerald-300">
+                      <span className="flex items-center gap-1.5">
+                        <BatteryCharging className="h-3.5 w-3.5 text-emerald-400" />
+                        ความจุแบตเตอรี่ BESS (Lithium):
+                      </span>
+                      <span className="font-bold font-mono">{batteryCapacityKwh} kWh</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="2.5"
+                      max="20.0"
+                      step="2.5"
+                      value={batteryCapacityKwh}
+                      onChange={e => setBatteryCapacityKwh(parseFloat(e.target.value))}
+                      className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-500"
+                    />
+                    <div className="text-[11px] text-slate-400">
+                      💡 <strong>Peak Shaving:</strong> แบตเตอรี่จะคายประจุช่วง On-Peak ค่ำ (18:00 - 22:00 น.) เพื่อจ่ายให้แอร์และโหลดหนัก ช่วยตัดค่าไฟ 5.80 บ. ออกไป
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* EV Charging Station Box */}
+          <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-5 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2">
+                <span className="text-lg">🚗</span>
+                <h3 className="text-sm font-bold text-white">ระบบชาร์จรถยนต์ไฟฟ้า (Smart EV Charging)</h3>
+              </div>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={evEnabled}
+                  onChange={e => setEvEnabled(e.target.checked)}
+                  className="w-4 h-4 accent-rose-500 rounded"
+                />
+                <span className="text-xs text-slate-300 font-semibold">{evEnabled ? 'เปิดใช้งาน EV' : 'ปิด EV'}</span>
+              </label>
+            </div>
+
+            {evEnabled ? (
+              <div className="space-y-3">
+                {/* EV Wallbox Power */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-300">กำลังไฟของ Wallbox:</label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      { kw: 3.6, label: '3.6 kW', sub: '1-Phase 16A' },
+                      { kw: 7.4, label: '7.4 kW', sub: '1-Phase 32A (มาตรฐาน)' },
+                      { kw: 11.0, label: '11 kW', sub: '3-Phase 16A' },
+                    ].map(item => (
+                      <button
+                        key={item.kw}
+                        onClick={() => setEvChargerKw(item.kw)}
+                        className={`p-2 rounded-xl text-center transition border ${
+                          evChargerKw === item.kw
+                            ? 'border-blue-500 bg-blue-500/10 text-white'
+                            : 'border-slate-800 bg-slate-950/60 text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        <div className="text-xs font-bold font-mono">{item.label}</div>
+                        <div className="text-[10px] text-slate-500">{item.sub}</div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Daily Battery Target */}
+                <div>
+                  <div className="flex justify-between text-xs text-slate-300 mb-1">
+                    <span>พลังงานที่ต้องชาร์จต่อวัน:</span>
+                    <span className="font-bold text-sky-400 font-mono">{evTargetKwh} kWh (~{(evTargetKwh * 6.5).toFixed(0)} กม.)</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="10.0"
+                    max="60.0"
+                    step="5.0"
+                    value={evTargetKwh}
+                    onChange={e => setEvTargetKwh(parseFloat(e.target.value))}
+                    className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-sky-500"
+                  />
+                </div>
+
+                {/* EV Smart Charging Strategy */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-300">กลยุทธ์การชาร์จไฟ (Charging Strategy):</label>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    {[
+                      { id: 'immediate', label: '🔴 ชาร์จทันที', desc: 'เสียบตอน 18:00 (On-Peak ค่าไฟแพงสุด)' },
+                      { id: 'smart_offpeak', label: '🟢 Smart Off-Peak', desc: 'ชาร์จ 22:00-08:00 (ประหยัด >54%)' },
+                      { id: 'solar_surplus', label: '☀️ Solar Charge', desc: 'ชาร์จกลางวันจากไฟโซลาร์ส่วนเกิน' },
+                    ].map(strat => (
+                      <button
+                        key={strat.id}
+                        onClick={() => setEvMode(strat.id as any)}
+                        className={`p-2.5 rounded-xl text-left transition border ${
+                          evMode === strat.id
+                            ? 'border-emerald-500 bg-emerald-500/10 text-white'
+                            : 'border-slate-800 bg-slate-950/60 text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        <div className="text-xs font-bold">{strat.label}</div>
+                        <div className="text-[10px] text-slate-500 mt-0.5">{strat.desc}</div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="p-8 text-center text-slate-500 text-xs">
+                ไม่ได้เปิดใช้งานโหลด EV Wallbox (คลิกเครื่องหมายถูกด้านบนเพื่อเปิดจำลอง)
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* ════════════════════════════════════════════════════════════════
+            SECTION 4: 24-HOUR ENERGY & LOAD BALANCE CHART
+           ════════════════════════════════════════════════════════════════ */}
+        <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-5 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-3">
+            <div>
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                <Activity className="h-4 w-4 text-emerald-400" />
+                กราฟสมดุลพลังงาน 24 ชั่วโมง (24-Hour Energy Balance & TOU Dispatch)
+              </h3>
+              <p className="text-[11px] text-slate-400">
+                แสดงการผลิตของโซลาร์, การทำงานของแบตเตอรี่, โหลด 3 วงจร และการชาร์จ EV แยกตามชั่วโมง On-Peak vs Off-Peak
+              </p>
+            </div>
+            <div className="flex items-center gap-3 text-[11px]">
+              <span className="flex items-center gap-1 text-rose-400">
+                <span className="h-2 w-2 rounded-full bg-rose-500" /> On-Peak (09:00 - 22:00)
+              </span>
+              <span className="flex items-center gap-1 text-emerald-400">
+                <span className="h-2 w-2 rounded-full bg-emerald-500" /> Off-Peak (22:00 - 09:00)
+              </span>
+            </div>
+          </div>
+
+          {/* 24-Hour Bar Chart */}
+          {simResult && (
+            <div className="space-y-2">
+              <div className="h-64 flex items-end gap-1 sm:gap-1.5 pt-6 pb-2 px-1 bg-slate-950/60 rounded-xl border border-slate-800/80 overflow-x-auto">
+                {simResult.hourly_chart.map(slot => {
+                  const maxKw = 10.0; // scale factor
+                  const loadHeight = Math.min(100, (slot.total_load_kw / maxKw) * 100);
+                  const solarHeight = Math.min(100, (slot.solar_gen_kw / maxKw) * 100);
+                  const gridHeight = Math.min(100, (slot.grid_import_kw / maxKw) * 100);
+
+                  return (
+                    <div
+                      key={slot.hour}
+                      className={`flex-1 min-w-[28px] h-full flex flex-col justify-end items-center relative group rounded-t transition-colors ${
+                        slot.is_on_peak ? 'bg-rose-950/20' : 'bg-emerald-950/20'
+                      }`}
+                    >
+                      {/* Tooltip on hover */}
+                      <div className="absolute bottom-full mb-2 hidden group-hover:flex flex-col bg-slate-900 text-white text-[10px] p-2 rounded-lg shadow-xl border border-slate-700 z-30 whitespace-nowrap">
+                        <div className="font-bold border-b border-slate-800 pb-1 mb-1">
+                          {slot.hour_label} ({slot.is_on_peak ? 'On-Peak 5.80฿' : 'Off-Peak 2.64฿'})
+                        </div>
+                        <div>โหลดรวม: <span className="font-mono text-amber-300">{slot.total_load_kw} kW</span></div>
+                        <div>โซลาร์: <span className="font-mono text-emerald-300">{slot.solar_gen_kw} kW</span></div>
+                        {slot.bat_discharge_kw > 0 && (
+                          <div className="text-emerald-400">แบตจ่าย: {slot.bat_discharge_kw} kW</div>
+                        )}
+                        {slot.ev_load_kw > 0 && (
+                          <div className="text-sky-300">ชาร์จ EV: {slot.ev_load_kw} kW</div>
+                        )}
+                        <div className="text-rose-300">ดึงไฟหลวง: {slot.grid_import_kw} kW</div>
+                        {slot.bat_soc_pct > 0 && (
+                          <div className="text-slate-400">แบตคงเหลือ: {slot.bat_soc_pct}%</div>
+                        )}
+                      </div>
+
+                      {/* Bar columns */}
+                      <div className="w-full flex items-end justify-center gap-0.5 px-0.5">
+                        {/* Solar generation bar */}
+                        {slot.solar_gen_kw > 0 && (
+                          <div
+                            className="w-1.5 bg-amber-400 rounded-t"
+                            style={{ height: `${solarHeight}%` }}
+                          />
+                        )}
+                        {/* Grid import bar */}
+                        <div
+                          className={`w-2.5 rounded-t transition-all ${
+                            slot.is_on_peak ? 'bg-rose-500' : 'bg-emerald-500'
+                          }`}
+                          style={{ height: `${gridHeight}%` }}
+                        />
+                      </div>
+
+                      <div className="text-[9px] text-slate-500 mt-1">{slot.hour}h</div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="flex items-center justify-between text-xs text-slate-400 px-1">
+                <span>00:00 (เที่ยงคืน)</span>
+                <span>09:00 (เริ่ม On-Peak)</span>
+                <span>12:00 (พีคโซลาร์)</span>
+                <span>18:00 (แดดหมด / โหลดหนัก)</span>
+                <span>22:00 (เริ่ม Off-Peak)</span>
+                <span>23:59</span>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* ════════════════════════════════════════════════════════════════
+            SECTION 5: FINANCIAL COMPARISON & SAVINGS ROI
+           ════════════════════════════════════════════════════════════════ */}
+        {simResult && (
+          <div className="rounded-2xl border border-emerald-500/30 bg-emerald-950/10 p-6 space-y-6">
+            <div>
+              <h3 className="text-lg font-black text-white flex items-center gap-2">
+                <DollarSign className="h-5 w-5 text-emerald-400" />
+                ผลการคำนวณและเปรียบเทียบค่าไฟฟ้า (Financial Comparison & Net ROI)
+              </h3>
+              <p className="text-xs text-slate-400 mt-1">
+                เปรียบเทียบระหว่างมิเตอร์ปกติ (Flat Rate) กับมิเตอร์ TOU เมื่อบริหารจัดการโหลด 3 วงจร โซลาร์เซลล์ และ EV
+              </p>
+            </div>
+
+            {/* Big 4 KPI cards */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="bg-slate-950/80 rounded-2xl p-4 border border-slate-800">
+                <div className="text-xs text-slate-400">ค่าไฟปกติ (Flat Rate 4.42฿)</div>
+                <div className="text-2xl font-black text-slate-300 mt-1 font-mono">
+                  ฿{simResult.costs.monthly_flat_cost_thb.toLocaleString()}
+                </div>
+                <div className="text-[11px] text-slate-500 mt-0.5">
+                  ตกวันละ ฿{simResult.costs.daily_flat_baseline_thb.toFixed(1)}
+                </div>
+              </div>
+
+              <div className="bg-slate-950/80 rounded-2xl p-4 border border-blue-500/30">
+                <div className="text-xs text-blue-300">ค่าไฟระบบใหม่ (TOU + Solar)</div>
+                <div className="text-2xl font-black text-blue-400 mt-1 font-mono">
+                  ฿{simResult.costs.monthly_tou_cost_thb.toLocaleString()}
+                </div>
+                <div className="text-[11px] text-slate-400 mt-0.5">
+                  ตกวันละ ฿{simResult.costs.daily_tou_cost_thb.toFixed(1)}
+                </div>
+              </div>
+
+              <div className="bg-slate-950/80 rounded-2xl p-4 border border-emerald-500/40">
+                <div className="text-xs text-emerald-300 font-semibold">ยอดเงินที่ประหยัดได้ / เดือน</div>
+                <div className="text-2xl font-black text-emerald-400 mt-1 font-mono">
+                  ฿{simResult.costs.monthly_savings_thb.toLocaleString()}
+                </div>
+                <div className="text-[11px] text-emerald-300/80 mt-0.5">
+                  ลดลง {simResult.costs.daily_savings_pct}% จากเดิม
+                </div>
+              </div>
+
+              <div className="bg-slate-950/80 rounded-2xl p-4 border border-amber-500/30">
+                <div className="text-xs text-amber-300">ระยะเวลาคืนทุนโดยประมาณ</div>
+                <div className="text-2xl font-black text-amber-400 mt-1 font-mono">
+                  {simResult.costs.payback_period_years > 0 ? `${simResult.costs.payback_period_years} ปี` : 'ทันที'}
+                </div>
+                <div className="text-[11px] text-slate-500 mt-0.5">
+                  ประหยัดปีละ ฿{simResult.costs.yearly_savings_thb.toLocaleString()}
+                </div>
+              </div>
+            </div>
+
+            {/* Detailed Table Comparison */}
+            <div className="rounded-xl border border-slate-800 bg-slate-950/60 overflow-hidden text-xs">
+              <div className="grid grid-cols-12 gap-2 p-3 bg-slate-900/90 font-bold text-slate-300 border-b border-slate-800">
+                <div className="col-span-5">รายการพลังงาน / อุปกรณ์</div>
+                <div className="col-span-3 text-right">พลังงานต่อวัน</div>
+                <div className="col-span-4 text-right">สัดส่วน / ผลกระทบ</div>
+              </div>
+
+              <div className="divide-y divide-slate-800/60">
+                <div className="grid grid-cols-12 gap-2 p-3 items-center">
+                  <div className="col-span-5 text-slate-200">💡 วงจรแสงสว่าง (Lighting)</div>
+                  <div className="col-span-3 text-right font-mono">{simResult.circuits_breakdown.lighting_kwh} kWh</div>
+                  <div className="col-span-4 text-right text-slate-400">{simResult.circuits_breakdown.lighting_pct}% ของโหลดบ้าน</div>
+                </div>
+
+                <div className="grid grid-cols-12 gap-2 p-3 items-center">
+                  <div className="col-span-5 text-slate-200">🔌 วงจรเต้ารับ/กำลัง (Receptacle)</div>
+                  <div className="col-span-3 text-right font-mono">{simResult.circuits_breakdown.receptacle_kwh} kWh</div>
+                  <div className="col-span-4 text-right text-slate-400">{simResult.circuits_breakdown.receptacle_pct}% ของโหลดบ้าน</div>
+                </div>
+
+                <div className="grid grid-cols-12 gap-2 p-3 items-center">
+                  <div className="col-span-5 text-rose-300 font-semibold">⚡ วงจรโหลดหนัก (แอร์ + น้ำอุ่น + ปั๊มน้ำ)</div>
+                  <div className="col-span-3 text-right font-mono text-rose-300">{simResult.circuits_breakdown.heavy_load_kwh} kWh</div>
+                  <div className="col-span-4 text-right text-rose-400 font-semibold">{simResult.circuits_breakdown.heavy_load_pct}% (ตัวแปรหลัก)</div>
+                </div>
+
+                {simResult.scenario.ev_enabled && (
+                  <div className="grid grid-cols-12 gap-2 p-3 items-center">
+                    <div className="col-span-5 text-sky-300">🚗 เครื่องชาร์จรถยนต์ไฟฟ้า EV ({simResult.scenario.ev_mode})</div>
+                    <div className="col-span-3 text-right font-mono text-sky-300">{simResult.circuits_breakdown.ev_kwh} kWh</div>
+                    <div className="col-span-4 text-right text-sky-400">{simResult.circuits_breakdown.ev_pct}% ของโหลดบ้าน</div>
+                  </div>
+                )}
+
+                {simResult.scenario.solar_mode !== 'none' && (
+                  <div className="grid grid-cols-12 gap-2 p-3 items-center bg-amber-950/10">
+                    <div className="col-span-5 text-amber-300 font-semibold">☀️ การผลิตไฟโซลาร์เซลล์รวม</div>
+                    <div className="col-span-3 text-right font-mono text-amber-400">+{simResult.totals.total_solar_gen_kwh} kWh</div>
+                    <div className="col-span-4 text-right text-emerald-400">Self-consumption {simResult.totals.solar_self_consumption_pct}%</div>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-12 gap-2 p-3 items-center bg-slate-900/40">
+                  <div className="col-span-5 text-white font-bold">ดึงไฟจากการไฟฟ้าช่วง On-Peak (5.80 บ.)</div>
+                  <div className="col-span-3 text-right font-mono text-rose-400 font-bold">{simResult.totals.on_peak_import_kwh} kWh</div>
+                  <div className="col-span-4 text-right text-rose-300">฿{simResult.costs.on_peak_cost_thb.toFixed(1)} / วัน</div>
+                </div>
+
+                <div className="grid grid-cols-12 gap-2 p-3 items-center bg-slate-900/40">
+                  <div className="col-span-5 text-white font-bold">ดึงไฟจากการไฟฟ้าช่วง Off-Peak (2.64 บ.)</div>
+                  <div className="col-span-3 text-right font-mono text-emerald-400 font-bold">{simResult.totals.off_peak_import_kwh} kWh</div>
+                  <div className="col-span-4 text-right text-emerald-300">฿{simResult.costs.off_peak_cost_thb.toFixed(1)} / วัน</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </main>
+    </div>
+  );
+}
