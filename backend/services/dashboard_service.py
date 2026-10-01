@@ -42,11 +42,19 @@ class DashboardService:
                 last_updated=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             )
 
-        ref_time_str = latest_readings[0]["timestamp"]
-        try:
-            ref_time = datetime.strptime(ref_time_str, "%Y-%m-%d %H:%M:%S")
-        except ValueError:
-            ref_time = datetime.fromisoformat(ref_time_str.replace("Z", "+00:00").split("+")[0].split(".")[0].replace("T", " ").strip())
+        valid_ts = [r["timestamp"] for r in latest_readings if r.get("timestamp")]
+        if valid_ts:
+            ref_time_str = max(valid_ts)
+            try:
+                ref_time = datetime.strptime(ref_time_str, "%Y-%m-%d %H:%M:%S")
+            except ValueError:
+                try:
+                    ref_time = datetime.fromisoformat(ref_time_str.replace("Z", "+00:00").split("+")[0].split(".")[0].replace("T", " ").strip())
+                except Exception:
+                    ref_time = datetime.now()
+        else:
+            ref_time = datetime.now()
+        ref_time_str = ref_time.strftime("%Y-%m-%d %H:%M:%S")
 
         today_start_str = ref_time.strftime("%Y-%m-%d 00:00:00")
         month_start_str = (ref_time - timedelta(days=30)).strftime("%Y-%m-%d %H:%M:%S")
