@@ -75,6 +75,14 @@ def on_startup():
         repo = get_firebase_repository()
         repo.clear_and_reseed()
         
+            
+        logger.info("✅ Firestore ready.")
+    else:
+        logger.info("🗄️  SQLite mode — initialising local database…")
+        from backend.database.connection import init_db
+        init_db()
+        logger.info("✅ SQLite ready.")
+
         # Seed 24h of historical data if Firebase is empty
         from backend.services.esp32_simulator_service import esp32_simulator
         from backend.database.repository import get_repository
@@ -87,13 +95,7 @@ def on_startup():
         if not recent:
             logger.info("[STARTUP] No recent readings found, seeding 24h historical data...")
             esp32_simulator.seed_historical_data(hours=24)
-            
-        logger.info("✅ Firestore ready.")
-    else:
-        logger.info("🗄️  SQLite mode — initialising local database…")
-        from backend.database.connection import init_db
-        init_db()
-        logger.info("✅ SQLite ready.")
+
 
     # Auto-start ESP32 multi-device simulator if requested
     enable_sim = os.getenv("ENABLE_ESP32_SIM", "false").lower() == "true"
@@ -142,3 +144,4 @@ def health():
     except Exception as e:
         import traceback
         return {"status": "unhealthy", "error": str(e), "trace": traceback.format_exc()}
+
