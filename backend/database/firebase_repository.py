@@ -214,7 +214,7 @@ class FirebaseRepository:
                     "humidity":    float(reading.get("humidity", 60.0)),
                     "occupancy":   1 if reading.get("occupancy", True) else 0,
                 }
-                batch.add(col, doc)
+                batch.set(col.document(), doc)
             batch.commit()
             count += len(chunk)
         # Update device statuses from last readings per device
