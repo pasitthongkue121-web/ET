@@ -10,7 +10,7 @@ services:
     autoDeploy: true
     envVars:
       - key: USE_FIREBASE
-        value: "true"
+        value: "false"
       - key: ENABLE_ESP32_SIM
         value: "true"
       - key: FIREBASE_PROJECT_ID
