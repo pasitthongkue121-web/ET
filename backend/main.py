@@ -131,9 +131,14 @@ def root():
 @app.get("/health")
 def health():
     try:
+        from backend.services.esp32_simulator_service import esp32_simulator
         from backend.services.energy_service import energy_service
         res = energy_service.get_energy_history(period="today")
-        return {"status": "healthy", "energy_len": len(res.get('timeseries', []))}
+        return {
+            "status": "healthy", 
+            "energy_len": len(res.get('timeseries', [])),
+            "sim_status": esp32_simulator.get_status()
+        }
     except Exception as e:
         import traceback
         return {"status": "unhealthy", "error": str(e), "trace": traceback.format_exc()}
