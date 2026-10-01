@@ -74,6 +74,20 @@ def on_startup():
         from backend.database.firebase_repository import get_firebase_repository
         repo = get_firebase_repository()
         repo.seed_if_empty()
+        
+        # Seed 24h of historical data if Firebase is empty
+        from backend.services.esp32_simulator_service import esp32_simulator
+        from backend.database.repository import get_repository
+        app_repo = get_repository()
+        from datetime import datetime, timedelta
+        now = datetime.now()
+        start = (now - timedelta(hours=1)).strftime("%Y-%m-%d %H:%M:%S")
+        end = now.strftime("%Y-%m-%d %H:%M:%S")
+        recent = app_repo.get_readings_timeseries(start, end)
+        if not recent:
+            logger.info("[STARTUP] No recent readings found, seeding 24h historical data...")
+            esp32_simulator.seed_historical_data(hours=24)
+            
         logger.info("✅ Firestore ready.")
     else:
         logger.info("🗄️  SQLite mode — initialising local database…")
