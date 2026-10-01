@@ -30,35 +30,49 @@ class AIEnergyPredictionEngine:
         ]
 
     def _prepare_dataset(self) -> pd.DataFrame:
-        conn = get_connection()
-        query = """
-            SELECT timestamp, 
-                   ROUND(SUM(power), 1) as power,
-                   ROUND(SUM(energy), 4) as energy,
-                   ROUND(AVG(temperature), 1) as temperature,
-                   ROUND(AVG(humidity), 1) as humidity,
-                   MAX(occupancy) as occupancy
-            FROM energy_readings
-            GROUP BY timestamp
-            ORDER BY timestamp ASC
-        """
-        df = pd.read_sql_query(query, conn)
-        conn.close()
-
-        if df.empty or len(df) < 200:
+        from backend.database.repository import get_repository
+        from datetime import datetime, timedelta
+        import pandas as pd
+        import numpy as np
+        
+        repo = get_repository()
+        end = datetime.now()
+        start = end - timedelta(days=7)
+        rows = repo.get_readings_timeseries(start.strftime("%Y-%m-%d %H:%M:%S"), end.strftime("%Y-%m-%d %H:%M:%S"))
+        
+        if not rows:
             return pd.DataFrame()
-
+            
+        df = pd.DataFrame(rows)
+        if "timestamp" not in df.columns or df.empty:
+            return pd.DataFrame()
+            
         df["dt"] = pd.to_datetime(df["timestamp"], format='mixed')
         df["hour"] = df["dt"].dt.hour
-        df["minute"] = df["dt"].dt.minute
         df["day_of_week"] = df["dt"].dt.dayofweek
-        df["is_weekend"] = df["day_of_week"].isin([5, 6]).astype(int)
-
-        # Lag & Rolling features (15-min intervals: 1h = 4 steps, 24h = 96 steps, 3h = 12 steps)
-        df["lag_power_1h"] = df["power"].shift(4).bfill()
-        df["lag_power_24h"] = df["power"].shift(96).bfill()
-        df["rolling_mean_3h"] = df["power"].rolling(12, min_periods=1).mean()
-
+        df["is_weekend"] = df["day_of_week"].apply(lambda x: 1 if x >= 5 else 0)
+        df["time_sin"] = np.sin(2 * np.pi * df["hour"] / 24)
+        df["time_cos"] = np.cos(2 * np.pi * df["hour"] / 24)
+        
+        # In sqlite it grouped by timestamp. Here it might have multiple devices per timestamp.
+        # We need to aggregate by timestamp to get total power.
+        df = df.groupby("timestamp").agg({
+            "power": "sum",
+            "energy": "sum",
+            "temperature": "mean",
+            "humidity": "mean",
+            "occupancy": "max",
+            "hour": "first",
+            "day_of_week": "first",
+            "is_weekend": "first",
+            "time_sin": "first",
+            "time_cos": "first"
+        }).reset_index()
+        
+        if len(df) < 50:
+            return pd.DataFrame()
+            
+        df.fillna(0, inplace=True)
         return df
 
     def train_and_evaluate(self) -> Tuple[Any, str, List[Dict[str, Any]], pd.DataFrame]:
