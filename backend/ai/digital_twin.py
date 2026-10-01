@@ -71,7 +71,8 @@ class DigitalTwinEngine:
         month_readings = repo.get_readings_timeseries(start_of_month, now_str)
         month_kwh = sum(r.get("energy", 0.0) for r in month_readings)
 
-        cost_thb = calculate_cost_from_readings(today_readings)
+        cost_result = calculate_cost_from_readings(today_readings)
+        cost_thb = cost_result.get("total_cost_thb", 0.0) if isinstance(cost_result, dict) else float(cost_result)
 
         return DigitalTwinState(
             timestamp=now_str,
