@@ -119,10 +119,8 @@ def health():
     try:
         from backend.database.repository import get_repository
         repo = get_repository()
-        # Just try to init the client
-        if hasattr(repo, "_client"):
-            repo._client()
-        return {"status": "healthy", "db": "connected"}
+        devices = repo.get_devices()
+        return {"status": "healthy", "db": "connected", "devices": len(devices)}
     except Exception as e:
         import traceback
         return {"status": "unhealthy", "error": str(e), "trace": traceback.format_exc()}
