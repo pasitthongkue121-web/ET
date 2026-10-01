@@ -24,13 +24,18 @@ class EnergyService:
         if not latest_readings:
             return {"period": period, "timeseries": [], "total_energy_kwh": 0.0, "total_cost_thb": 0.0}
 
-        # Reference latest timestamp in DB as the current baseline
-        ref_time_str = latest_readings[0]["timestamp"]
-        try:
-            ref_time = datetime.strptime(ref_time_str, "%Y-%m-%d %H:%M:%S")
-        except ValueError:
-            # Handle ISO8601 format like '2026-09-14T15:49:58.249Z'
-            ref_time = datetime.fromisoformat(ref_time_str.replace("Z", "+00:00").replace("T", " ").split("+")[0].split(".")[0].strip())
+        valid_ts = [r["timestamp"] for r in latest_readings if r.get("timestamp")]
+        if valid_ts:
+            ref_time_str = max(valid_ts)
+            try:
+                ref_time = datetime.strptime(ref_time_str, "%Y-%m-%d %H:%M:%S")
+            except ValueError:
+                try:
+                    ref_time = datetime.fromisoformat(ref_time_str.replace("Z", "+00:00").replace("T", " ").split("+")[0].split(".")[0].strip())
+                except:
+                    ref_time = datetime.now()
+        else:
+            ref_time = datetime.now()
 
         if period == "today":
             start_time = ref_time.replace(hour=0, minute=0, second=0)
