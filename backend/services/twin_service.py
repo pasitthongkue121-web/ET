@@ -12,17 +12,19 @@ class TwinService:
     def __init__(self):
         self.engine = digital_twin_engine
 
-    def get_home(self) -> DigitalTwinHome:
-        return self.engine.get_home()
+    def get_home(self):
+        rooms = self.engine.get_rooms()
+        state = self.engine.get_system_state()
+        return {"state": state, "rooms": rooms}
 
-    def get_rooms(self) -> List[DigitalTwinRoom]:
+    def get_rooms(self):
         return self.engine.get_rooms()
 
-    def get_devices(self) -> List[DigitalTwinDevice]:
+    def get_devices(self):
         return self.engine.get_devices()
 
-    def get_state(self) -> DigitalTwinState:
-        return self.engine.get_state()
+    def get_state(self):
+        return self.engine.get_system_state()
 
     def get_device_detail(self, device_id: str) -> Optional[DigitalTwinDeviceDetail]:
         return self.engine.get_device_detail(device_id)
