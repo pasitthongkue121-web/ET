@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 
 from backend.database.repository import get_repository
 from backend.ai.anomaly_detection import run_full_anomaly_scan
-from backend.ai.prediction import predict_forecasts
+from backend.ai.prediction import prediction_engine
 
 router = APIRouter(prefix="/api/prediction", tags=["Prediction"])
 
@@ -22,7 +22,7 @@ def get_forecast(hours_ahead: int = Query(24, ge=1, le=72)):
     now = datetime.now()
     start = (now - timedelta(days=30)).strftime("%Y-%m-%d %H:%M:%S")
     end = now.strftime("%Y-%m-%d %H:%M:%S")
-    readings = repo.get_readings_timeseries(start, end)
+    result = prediction_engine.predict_forecasts()
     result = predict_forecasts(readings, hours_ahead=hours_ahead)
     return result
 
