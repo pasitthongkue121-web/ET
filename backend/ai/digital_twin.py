@@ -74,15 +74,18 @@ class DigitalTwinEngine:
         cost_result = calculate_cost_from_readings(today_readings)
         cost_thb = cost_result.get("total_cost_thb", 0.0) if isinstance(cost_result, dict) else float(cost_result)
 
-        return DigitalTwinState(
+        from backend.database.models import DigitalTwinState as DTState
+        return DTState(
             timestamp=now_str,
-            status="ONLINE" if active_devices > 0 else "IDLE",
-            current_power_kw=round(current_power, 2),
-            daily_energy_kwh=round(today_kwh, 2),
-            monthly_energy_kwh=round(month_kwh, 2),
-            total_devices=total_devices,
-            active_devices=active_devices,
-            cost_today_thb=round(cost_thb, 2)
+            total_power_kw=round(current_power, 2),
+            temperature_c=25.0,
+            humidity_pct=60.0,
+            occupancy=active_devices > 0,
+            occupancy_count=active_devices,
+            active_devices_count=active_devices,
+            total_devices_count=total_devices,
+            estimated_cost_today_thb=round(cost_thb, 2),
+            tag="MEASURED"
         )
 
     def get_rooms(self) -> List[DigitalTwinRoom]:
