@@ -22,8 +22,9 @@ def get_forecast(hours_ahead: int = Query(24, ge=1, le=72)):
     now = datetime.now()
     start = (now - timedelta(days=30)).strftime("%Y-%m-%d %H:%M:%S")
     end = now.strftime("%Y-%m-%d %H:%M:%S")
+    # We no longer pass readings as argument to predict_forecasts because
+    # AIEnergyPredictionEngine pulls them internally
     result = prediction_engine.predict_forecasts()
-    result = predict_forecasts(readings, hours_ahead=hours_ahead)
     return result
 
 
