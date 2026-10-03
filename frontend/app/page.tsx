@@ -57,18 +57,20 @@ const AUTO_REFRESH_SECONDS = 30;
 
 export default function DashboardPage() {
   const router = useRouter();
+  const [authChecked, setAuthChecked] = useState(false);
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [energyData, setEnergyData] = useState<EnergyHistoryResponse | null>(null);
   const [devices, setDevices] = useState<Device[]>([]);
   const [period, setPeriod] = useState<'today' | '7d' | '30d'>('today');
 
-  // Auth guard
+  // Auth guard — runs before any data fetch
   useEffect(() => {
     if (!isLoggedIn()) {
-      router.push('/login');
+      router.replace('/login');
+    } else {
+      setAuthChecked(true);
     }
   }, []);
-
 
   // Phase 2 states
   const [analyticsSummary, setAnalyticsSummary] = useState<AnalyticsSummary | null>(null);
@@ -89,6 +91,7 @@ export default function DashboardPage() {
   const [activeSecondaryTab, setActiveSecondaryTab] = useState<'devices' | 'insights' | 'activity'>('devices');
 
   const loadData = useCallback(async () => {
+    if (!isLoggedIn()) return; // safety guard
     setIsLoading(true);
     setError(null);
     try {
@@ -107,9 +110,9 @@ export default function DashboardPage() {
         insightRes,
         gsRes,
       ] = await Promise.all([
-        getDashboardSummary(),
-        getEnergyHistory(period),
-        getDevices(),
+        getDashboardSummary().catch(() => null),
+        getEnergyHistory(period).catch(() => null),
+        getDevices().catch(() => []),
         getAnalyticsSummary(30).catch(() => null),
         getDailyAnalytics(14).catch(() => []),
         getDeviceAnalytics(30).catch(() => []),
@@ -119,15 +122,15 @@ export default function DashboardPage() {
         getGSheetStatus().catch(() => null),
       ]);
 
-      setSummary(sumRes);
-      setEnergyData(energyRes);
-      setDevices(devRes);
+      if (sumRes) setSummary(sumRes);
+      if (energyRes) setEnergyData(energyRes);
+      setDevices(devRes as Device[]);
       setAnalyticsSummary(anSumRes);
-      setDailyAnalytics(dailyRes);
-      setDeviceAnalytics(devAnRes);
+      setDailyAnalytics(dailyRes as DailyEnergyItem[]);
+      setDeviceAnalytics(devAnRes as DeviceConsumptionItem[]);
       setPeakAnalytics(peakRes);
       setRoutineData(routRes);
-      setAutoInsights(insightRes);
+      setAutoInsights(insightRes as InsightDetectionItem[]);
       setGsheetStatus(gsRes);
     } catch (err: any) {
       console.error('Error loading dashboard data:', err);
@@ -138,9 +141,14 @@ export default function DashboardPage() {
     }
   }, [period]);
 
+  // Only load data after auth is confirmed
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    if (authChecked) {
+      loadData();
+    }
+  }, [loadData, authChecked]);
+
+
 
   // Auto-refresh interval
   useEffect(() => {
@@ -180,6 +188,18 @@ export default function DashboardPage() {
   const todayCost = summary?.today_cost_thb ?? 0.0;
   const onlineCount = summary?.devices_online ?? devices.filter(d => d.status).length;
   const totalCount = summary?.devices_total ?? devices.length;
+
+  // Show spinner while checking auth (prevents flash of unauthenticated content)
+  if (!authChecked) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-10 h-10 border-2 border-sky-500 border-t-transparent rounded-full animate-spin" />
+          <p className="text-slate-400 text-sm">กำลังตรวจสอบสิทธิ์...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <AppShell
