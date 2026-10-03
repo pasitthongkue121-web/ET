@@ -86,9 +86,6 @@ export default function PipelinePage() {
   const [sheetStatus, setSheetStatus] = useState<GSheetStatus | null>(null);
   const [appsScriptCode, setAppsScriptCode] = useState<string>('');
 
-  // Gate: user must click before data loads
-  const [isActivated, setIsActivated] = useState(false);
-
   // Simulator controls
   const [selectedDevice, setSelectedDevice] = useState<string>('living_room_ac');
   const [sliderWatts, setSliderWatts] = useState<number>(1200);
@@ -112,41 +109,13 @@ export default function PipelinePage() {
     } catch {}
   }, []);
 
-  // Only start polling AFTER user activates
+  // Auto-poll pipeline STATUS only (does not start simulator or write data)
   useEffect(() => {
-    if (!isActivated) return;
     refreshData();
     getGSheetAppsScriptTemplate().then(t => setAppsScriptCode(t.code)).catch(() => {});
     const interval = setInterval(refreshData, 5000);
     return () => clearInterval(interval);
-  }, [refreshData, isActivated]);
-
-  // If not activated, show a gate screen
-  if (!isActivated) {
-    return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center p-6">
-        <div className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-2xl p-8 text-center shadow-2xl">
-          <div className="w-14 h-14 rounded-2xl bg-sky-500/10 border border-sky-500/20 flex items-center justify-center mx-auto mb-5">
-            <Activity className="w-7 h-7 text-sky-400" />
-          </div>
-          <h1 className="text-xl font-bold text-white mb-2">Data Pipeline</h1>
-          <p className="text-slate-400 text-sm mb-6">
-            Pipeline ควบคุม ESP32 Simulator และการส่งข้อมูลพลังงาน<br />
-            กด <strong className="text-white">เปิด Pipeline</strong> เพื่อเริ่มโหลดสถานะ
-          </p>
-          <button
-            onClick={() => setIsActivated(true)}
-            className="w-full bg-sky-600 hover:bg-sky-500 text-white font-semibold py-3 rounded-xl text-sm transition-colors"
-          >
-            ⚡ เปิด Pipeline
-          </button>
-          <p className="text-slate-600 text-xs mt-4">
-            Pipeline จะไม่เริ่มส่งข้อมูลจนกว่าคุณจะกดปุ่มนี้
-          </p>
-        </div>
-      </div>
-    );
-  }
+  }, [refreshData]);
 
 
 
