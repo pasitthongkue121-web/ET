@@ -36,16 +36,19 @@ import {
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL ||
-  (typeof window !== 'undefined' ? '' : 'http://127.0.0.1:8000');
+  'https://energy-twins-ai.onrender.com';
 
-async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs = 8000): Promise<Response> {
+async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs = 35000): Promise<Response> {
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), timeoutMs);
+  const token = typeof window !== 'undefined' ? localStorage.getItem('energy_token') : null;
+  const authHeaders = token ? { 'Authorization': `Bearer ${token}` } : {};
   try {
     const response = await fetch(url, {
       ...options,
+      headers: { ...(options.headers as Record<string, string> || {}), ...authHeaders },
       signal: controller.signal,
-      cache: 'no-store', // Always fresh data
+      cache: 'no-store',
     });
     clearTimeout(id);
     return response;
@@ -54,6 +57,7 @@ async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutM
     throw err;
   }
 }
+
 
 export async function checkBackendHealth(): Promise<boolean> {
   try {
