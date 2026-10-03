@@ -4,7 +4,8 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { registerUser } from '../../lib/auth-api';
-import { Zap } from 'lucide-react';
+import { Zap } from '../../components/Icons';
+
 
 export default function RegisterPage() {
   const router = useRouter();
