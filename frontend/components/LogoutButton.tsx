@@ -1,10 +1,15 @@
 'use client';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { clearToken, getUserName } from '../lib/auth';
 
 export default function LogoutButton() {
   const router = useRouter();
-  const name = typeof window !== 'undefined' ? getUserName() : null;
+  const [name, setName] = useState<string | null>(null);
+
+  useEffect(() => {
+    setName(getUserName());
+  }, []);
 
   const handleLogout = () => {
     clearToken();
@@ -27,3 +32,4 @@ export default function LogoutButton() {
     </div>
   );
 }
+
