@@ -12,7 +12,7 @@ services:
       - key: USE_FIREBASE
         value: "false"
       - key: ENABLE_ESP32_SIM
-        value: "true"
+        value: "false"
       - key: FIREBASE_PROJECT_ID
         sync: false
       - key: FIREBASE_CREDENTIALS_JSON
