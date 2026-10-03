@@ -22,6 +22,11 @@ from backend.api import (
     tou_simulation,
 )
 
+# Multi-user v2 APIs
+from backend.api import auth as auth_api
+from backend.api import devices_v2, energy_v2, dashboard_v2, esp32_api, ai_api, tou_v2
+
+
 app = FastAPI(
     title="ENERGY TWINS AI Backend",
     description=(
@@ -63,11 +68,28 @@ app.include_router(gsheet_ingest.router)
 app.include_router(schedule_control.router)
 app.include_router(tou_simulation.router)
 
+# ── Multi-User v2 Routers ─────────────────────────────────────────────────────
+app.include_router(auth_api.router)
+app.include_router(devices_v2.router)
+app.include_router(energy_v2.router)
+app.include_router(dashboard_v2.router)
+app.include_router(esp32_api.router)
+app.include_router(ai_api.router)
+app.include_router(tou_v2.router)
+
+
 
 # ── Startup ───────────────────────────────────────────────────────────────────
 @app.on_event("startup")
 def on_startup():
+    # ── Create SQLAlchemy (multi-user) tables ─────────────────────────────────
+    from backend.database.database import engine as sqla_engine
+    from backend.database import orm_models as sqla_models
+    sqla_models.Base.metadata.create_all(bind=sqla_engine)
+    logger.info("[STARTUP] SQLAlchemy multi-user tables created/verified ✅")
+
     use_firebase = os.getenv("USE_FIREBASE", "false").lower() == "true"
+
 
     if use_firebase:
         logger.info("🔥 Firebase mode enabled — initialising Firestore repository…")
