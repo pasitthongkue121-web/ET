@@ -20,6 +20,8 @@ import {
   Trash2,
 } from './Icons';
 import ResetDataModal from './ResetDataModal';
+import LogoutButton from './LogoutButton';
+
 
 
 interface AppShellProps {
@@ -145,8 +147,12 @@ export default function AppShell({
             <Trash2 className="h-3 w-3 text-rose-400" />
             <span className="hidden sm:inline font-semibold">Reset Data</span>
           </button>
+
+          {/* Logout Button */}
+          <LogoutButton />
         </div>
       </header>
+
 
 
       {/* ─── Main Content Body with Sidebar ────────────────────────── */}
