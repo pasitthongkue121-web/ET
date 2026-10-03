@@ -83,10 +83,30 @@ app.include_router(tou_v2.router)
 @app.on_event("startup")
 def on_startup():
     # ── Create SQLAlchemy (multi-user) tables ─────────────────────────────────
-    from backend.database.database import engine as sqla_engine
+    from backend.database.database import engine as sqla_engine, SessionLocal as sqla_session
     from backend.database import orm_models as sqla_models
     sqla_models.Base.metadata.create_all(bind=sqla_engine)
     logger.info("[STARTUP] SQLAlchemy multi-user tables created/verified ✅")
+
+    # ── Seed Admin User ────────────────────────────────────────────────────────
+    from backend.core.security import get_password_hash
+    _db = sqla_session()
+    try:
+        admin = _db.query(sqla_models.User).filter(sqla_models.User.email == "admin@energytwin.com").first()
+        if not admin:
+            admin_user = sqla_models.User(
+                id="admin_001",
+                email="admin@energytwin.com",
+                password_hash=get_password_hash("1234"),
+                name="Admin"
+            )
+            _db.add(admin_user)
+            _db.commit()
+            logger.info("[STARTUP] Admin user created: admin@energytwin.com / 1234 ✅")
+        else:
+            logger.info("[STARTUP] Admin user already exists ✅")
+    finally:
+        _db.close()
 
     use_firebase = os.getenv("USE_FIREBASE", "false").lower() == "true"
 
