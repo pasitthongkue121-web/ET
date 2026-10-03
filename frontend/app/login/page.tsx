@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { loginUser } from '../../lib/auth-api';
 import { saveToken } from '../../lib/auth';
-import { Zap } from 'lucide-react';
+import { Zap } from '../../components/Icons';
+
 
 export default function LoginPage() {
   const router = useRouter();
