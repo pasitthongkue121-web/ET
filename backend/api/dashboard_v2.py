@@ -34,32 +34,85 @@ def get_dashboard(db: Session = Depends(get_db), current_user: User = Depends(ge
     monthly_energy = sum(r.energy_kwh or 0 for r in month_rows)
     monthly_cost = sum((r.energy_kwh or 0) * get_rate(r.timestamp) for r in month_rows)
 
-    # Current power: latest reading per device (last 5 min)
+    # Current power (last 5 min)
     recent_cutoff = now - timedelta(minutes=5)
     recent_rows = db.query(EnergyData).filter(
         EnergyData.user_id == current_user.id,
         EnergyData.timestamp >= recent_cutoff
     ).all()
-    current_power = sum(r.power or 0 for r in recent_rows) / 1000 if recent_rows else 0  # kW
+    current_power_kw = sum(r.power or 0 for r in recent_rows) / 1000 if recent_rows else 0.0
 
-    # Active devices
-    active_device_ids = {r.device_id for r in recent_rows}
-    active_devices = len(active_device_ids)
+    # Devices
+    all_devices = db.query(Device).filter(Device.user_id == current_user.id).all()
+    active_ids = {r.device_id for r in recent_rows}
+    devices_online = len(active_ids)
+    devices_total = len(all_devices)
 
-    # Simple prediction: today's energy rate * remaining hours
-    elapsed_hours = (now - today_start).seconds / 3600
-    predicted_energy = (today_energy / elapsed_hours * 24) if elapsed_hours > 0 else 0
-    estimated_saving = predicted_energy * 0.15 * OFFPEAK_RATE  # 15% saving estimate
+    # Forecast
+    elapsed_hours = max((now - today_start).seconds / 3600, 0.1)
+    monthly_forecast_kwh = (today_energy / elapsed_hours * 24 * 30) if today_energy > 0 else 0.0
+    monthly_forecast_cost = monthly_forecast_kwh * PEAK_RATE
+
+    # Energy score (simple 0-100 based on usage efficiency)
+    score = max(0, 100 - int(current_power_kw * 10))
+    energy_score = {
+        "overall": score,
+        "efficiency": score,
+        "tou_optimization": 80,
+        "peak_reduction": 75,
+        "label": "ดี" if score >= 70 else "ปานกลาง" if score >= 40 else "ควรปรับปรุง"
+    }
+
+    # Generate insights from data
+    insights = []
+    if current_power_kw > 2.0:
+        insights.append({
+            "type": "warning",
+            "title": "กำลังไฟสูง",
+            "description": f"กำลังไฟปัจจุบัน {current_power_kw:.1f} kW สูงกว่าปกติ",
+            "severity": "medium"
+        })
+    if not insights:
+        insights.append({
+            "type": "info",
+            "title": "ระบบพร้อมใช้งาน",
+            "description": "เพิ่มอุปกรณ์และเริ่มส่งข้อมูลพลังงานเพื่อดู Insights",
+            "severity": "low"
+        })
+
+    # Recent activities from latest energy data
+    recent_all = db.query(EnergyData).filter(
+        EnergyData.user_id == current_user.id
+    ).order_by(EnergyData.timestamp.desc()).limit(5).all()
+
+    recent_activities = [
+        {
+            "device_id": r.device_id,
+            "timestamp": r.timestamp.isoformat(),
+            "power_kw": round((r.power or 0) / 1000, 3),
+            "energy_kwh": round(r.energy_kwh or 0, 4),
+            "description": f"บันทึกพลังงาน {round((r.energy_kwh or 0), 4)} kWh"
+        }
+        for r in recent_all
+    ]
 
     return {
+        # ── Fields matching existing frontend DashboardSummary type ──
+        "current_power_kw": round(current_power_kw, 3),
+        "today_energy_kwh": round(today_energy, 4),
+        "today_cost_thb": round(today_cost, 2),
+        "monthly_energy_kwh": round(monthly_energy, 4),
+        "monthly_cost_thb": round(monthly_cost, 2),
+        "monthly_forecast_kwh": round(monthly_forecast_kwh, 4),
+        "monthly_forecast_cost_thb": round(monthly_forecast_cost, 2),
+        "energy_score": energy_score,
+        "insights": insights,
+        "recent_activities": recent_activities,
+        "devices_online": devices_online,
+        "devices_total": devices_total,
+        "last_updated": now.isoformat(),
+        # ── Extra fields for new UI ──
         "user_name": current_user.name,
         "user_id": current_user.id,
-        "today_energy": round(today_energy, 4),
-        "today_cost": round(today_cost, 2),
-        "monthly_energy": round(monthly_energy, 4),
-        "monthly_cost": round(monthly_cost, 2),
-        "current_power": round(current_power, 3),
-        "active_devices": active_devices,
-        "predicted_energy": round(predicted_energy, 4),
-        "estimated_saving": round(estimated_saving, 2),
+        "estimated_saving": round(monthly_forecast_kwh * 0.15 * OFFPEAK_RATE, 2),
     }
