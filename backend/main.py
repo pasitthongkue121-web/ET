@@ -53,22 +53,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ── Routers ──────────────────────────────────────────────────────────────────
-app.include_router(dashboard.router)
-app.include_router(energy.router)
-app.include_router(devices.router)
-app.include_router(rooms.router)
-app.include_router(analytics.router)
-app.include_router(routine.router)
-app.include_router(prediction.router)
-app.include_router(twin.router)
-app.include_router(simulation.router)
-app.include_router(google_integration.router)
-app.include_router(gsheet_ingest.router)
-app.include_router(schedule_control.router)
-app.include_router(tou_simulation.router)
-
-# ── Multi-User v2 Routers ─────────────────────────────────────────────────────
+# ── Multi-User v2 Routers (registered FIRST for priority) ────────────────────
 app.include_router(auth_api.router)
 app.include_router(devices_v2.router)
 app.include_router(energy_v2.router)
@@ -76,6 +61,21 @@ app.include_router(dashboard_v2.router)
 app.include_router(esp32_api.router)
 app.include_router(ai_api.router)
 app.include_router(tou_v2.router)
+
+# ── Legacy Routers (prefixed with /legacy to avoid conflicts) ─────────────────
+app.include_router(dashboard.router, prefix="/legacy")
+app.include_router(energy.router, prefix="/legacy")
+app.include_router(devices.router, prefix="/legacy")
+app.include_router(rooms.router)
+app.include_router(analytics.router, prefix="/legacy")
+app.include_router(routine.router)
+app.include_router(prediction.router, prefix="/legacy")
+app.include_router(twin.router)
+app.include_router(simulation.router)
+app.include_router(google_integration.router)
+app.include_router(gsheet_ingest.router)
+app.include_router(schedule_control.router)
+app.include_router(tou_simulation.router, prefix="/legacy")
 
 
 
