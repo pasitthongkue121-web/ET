@@ -2,6 +2,9 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { isLoggedIn } from '../lib/auth';
+
 import AppShell from '../components/AppShell';
 import MetricCard from '../components/MetricCard';
 import PowerChart from '../components/PowerChart';
@@ -53,10 +56,19 @@ import {
 const AUTO_REFRESH_SECONDS = 30;
 
 export default function DashboardPage() {
+  const router = useRouter();
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [energyData, setEnergyData] = useState<EnergyHistoryResponse | null>(null);
   const [devices, setDevices] = useState<Device[]>([]);
   const [period, setPeriod] = useState<'today' | '7d' | '30d'>('today');
+
+  // Auth guard
+  useEffect(() => {
+    if (!isLoggedIn()) {
+      router.push('/login');
+    }
+  }, []);
+
 
   // Phase 2 states
   const [analyticsSummary, setAnalyticsSummary] = useState<AnalyticsSummary | null>(null);
