@@ -123,22 +123,22 @@ def on_startup():
         logger.info("✅ Firestore ready.")
     else:
         logger.info("🗄️  SQLite mode — initialising local database…")
-        from backend.database.connection import init_db
+        from backend.database.connection import init_db, get_connection
         init_db()
-        logger.info("✅ SQLite ready.")
 
-        # Seed 24h of historical data if Firebase is empty
-        from backend.services.esp32_simulator_service import esp32_simulator
-        from backend.database.repository import get_repository
-        app_repo = get_repository()
-        from datetime import datetime, timedelta
-        now = datetime.now()
-        start = (now - timedelta(hours=1)).strftime("%Y-%m-%d %H:%M:%S")
-        end = now.strftime("%Y-%m-%d %H:%M:%S")
-        recent = app_repo.get_readings_timeseries(start, end)
-        if not recent:
-            logger.info("[STARTUP] No recent readings found, seeding 24h historical data...")
-            esp32_simulator.seed_historical_data(hours=24)
+        # If simulator is disabled, clear all old energy data for a clean slate
+        enable_sim = os.getenv("ENABLE_ESP32_SIM", "false").lower() == "true"
+        if not enable_sim:
+            try:
+                conn = get_connection()
+                conn.execute("DELETE FROM energy_readings")
+                conn.commit()
+                conn.close()
+                logger.info("[STARTUP] ✅ energy_readings cleared — fresh start (simulator disabled)")
+            except Exception as e:
+                logger.warning(f"[STARTUP] Could not clear energy_readings: {e}")
+        else:
+            logger.info("✅ SQLite ready (simulator enabled — keeping existing data)")
 
 
     # Auto-start ESP32 multi-device simulator if requested
