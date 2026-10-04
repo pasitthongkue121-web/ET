@@ -157,7 +157,7 @@ export default function PipelinePage() {
     {
       num: 2,
       title: 'FastAPI Backend',
-      sub: health?.stage4_brain ? ${health.stage4_brain.total_readings} records in DB : 'AI & Digital Twin Database',
+      sub: health?.stage4_brain ? `${health.stage4_brain.total_readings} records in DB` : 'AI & Digital Twin Database',
       status: 'online',
       icon: <Zap className="h-5 w-5 text-amber-400" />
     },
