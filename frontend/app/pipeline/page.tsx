@@ -104,8 +104,7 @@ export default function PipelinePage() {
   // Auto-poll pipeline STATUS only (does not start simulator or write data)
   useEffect(() => {
     refreshData();
-    ().then(t => setAppsScriptCode(t.code)).catch(() => {});
-    const interval = setInterval(refreshData, 5000);
+        const interval = setInterval(refreshData, 5000);
     return () => clearInterval(interval);
   }, [refreshData]);
 
