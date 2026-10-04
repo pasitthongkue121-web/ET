@@ -87,7 +87,7 @@ export default function PipelinePage() {
   const [isSendingPacket, setIsSendingPacket] = useState(false);
   const [actionMessage, setActionMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  const [activeTab, setActiveTab] = useState<'simulator' | 'firmware' | 'appsscript'>('simulator');
+  const [activeTab, setActiveTab] = useState<'simulator' | 'firmware'>('simulator');
 
   const refreshData = useCallback(async () => {
     try {
@@ -276,17 +276,6 @@ export default function PipelinePage() {
             <Zap className="h-4 w-4" />
             ESP32 Arduino Firmware (.ino)
           </button>
-          <button
-            onClick={() => setActiveTab('appsscript')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
-              activeTab === 'appsscript'
-                ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30'
-                : 'text-slate-400 hover:text-white hover:bg-slate-900'
-            }`}
-          >
-            <Globe className="h-4 w-4" />
-            Google Apps Script 2-Way Code
-          </button>
         </div>
 
         {/* ------------------------------------------------------------- */}
@@ -469,15 +458,14 @@ export default function PipelinePage() {
 
 const char* WIFI_SSID     = "YOUR_WIFI_NAME";
 const char* WIFI_PASSWORD = "YOUR_WIFI_PASSWORD";
-const char* GOOGLE_SCRIPT_URL = "${sheetStatus?.web_app_url || 'https://script.google.com/macros/s/YOUR_DEPLOYMENT_ID/exec'}";
+const char* BACKEND_URL = "https://energy-twins-ai.onrender.com/api/esp32/energy";
 
 void sendTelemetry(float power_w, float energy_kwh) {
   WiFiClientSecure client;
   client.setInsecure(); // Bypass CA validation
 
   HTTPClient http;
-  http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS); // Follow Google 302 redirect
-  http.begin(client, GOOGLE_SCRIPT_URL);
+  http.begin(client, BACKEND_URL);
   http.addHeader("Content-Type", "application/json");
 
   String json = "{\\"device_id\\":\\"living_room_ac\\",\\"power_w\\":" + String(power_w) + ",\\"voltage\\":230.0,\\"energy_kwh\\":" + String(energy_kwh) + "}";
@@ -486,27 +474,6 @@ void sendTelemetry(float power_w, float energy_kwh) {
   http.end();
 }`}
             />
-          </div>
-        )}
-
-        {/* ------------------------------------------------------------- */}
-        {/* TAB 3: UPGRADED GOOGLE APPS SCRIPT CODE                       */}
-        {/* ------------------------------------------------------------- */}
-        {activeTab === 'appsscript' && (
-          <div className="space-y-4">
-            <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 space-y-3">
-              <h3 className="text-lg font-bold text-white">Google Apps Script 2-Way IoT Telemetry Hub</h3>
-              <p className="text-xs text-slate-400">
-                สคริปต์นี้ติดตั้งใน Google Sheet เพื่อรับข้อมูลจาก ESP32 (`doPost`) และส่งต่อไปยัง FastAPI (`doGet`) พร้อมระบบสร้างหัวตารางอัตโนมัติ และจำกัดความยาว 5,000 แถวเพื่อไม่ให้ชีตช้า
-              </p>
-            </div>
-
-            {appsScriptCode && (
-              <CodeBlock
-                language="Google Apps Script (JavaScript)"
-                code={appsScriptCode}
-              />
-            )}
           </div>
         )}
       </main>
