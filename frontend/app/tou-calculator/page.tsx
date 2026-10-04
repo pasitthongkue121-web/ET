@@ -54,8 +54,8 @@ export default function TOUCalculatorPage() {
   const loadData = useCallback(async () => {
     try {
       const [statusRes, circuitsRes] = await Promise.all([
-        getTOUStatus(),
-        getTOUCircuits(),
+        getTOUStatus().catch(() => null),
+        getTOUCircuits().catch(() => []),
       ]);
       setTouStatus(statusRes);
       setCircuits(circuitsRes);
