@@ -30,8 +30,8 @@ export default function PersonalRoutinePage() {
       setIsBackendOnline(isHealthy);
 
       const [routRes, probRes] = await Promise.all([
-        getRoutine(days),
-        getRoutineProbabilities(days),
+        getRoutine(days).catch(() => null),
+        getRoutineProbabilities(days).catch(() => null),
       ]);
 
       setRoutine(routRes);
