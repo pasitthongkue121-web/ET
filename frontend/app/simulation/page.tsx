@@ -81,18 +81,18 @@ function SimulationStudioContent() {
       setIsBackendOnline(isHealthy);
       if (isHealthy) {
         const [templatesRes, scenariosRes, recRes] = await Promise.all([
-          getSimulationTemplates(),
-          getScenariosComparison(),
-          getAIRecommendation()
+          getSimulationTemplates().catch(() => [] as SimulationTemplateItem[]),
+          getScenariosComparison().catch(() => null),
+          getAIRecommendation().catch(() => null)
         ]);
-        setTemplates(templatesRes);
-        setScenariosTable(scenariosRes);
-        setRecommendation(recRes);
+        if (templatesRes) setTemplates(templatesRes as SimulationTemplateItem[]);
+        if (scenariosRes) setScenariosTable(scenariosRes);
+        if (recRes) setRecommendation(recRes);
 
-        // Run default simulation to immediately show results
-        const defaultRun = await runSimulation(params);
-        setActiveResult(defaultRun);
-        const scoreRes = await calculateScenarioScores(weights);
+        // Run default simulation to show results immediately
+        const defaultRun = await runSimulation(params).catch(() => null);
+        if (defaultRun) setActiveResult(defaultRun);
+        const scoreRes = await calculateScenarioScores(weights).catch(() => []);
         setScores(scoreRes);
       }
     } catch (err) {
