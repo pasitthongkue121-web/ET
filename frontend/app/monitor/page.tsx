@@ -22,7 +22,7 @@ export default function EnergyMonitorPage() {
       setIsBackendOnline(isHealthy);
 
       const [devRes, histRes] = await Promise.all([
-        getDevices(),
+        getDevices().catch(() => []),
         getEnergyHistory(period, selectedDevice || undefined),
       ]);
       setDevices(devRes);
