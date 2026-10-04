@@ -46,8 +46,6 @@ const NAV_ITEMS = [
 const SECONDARY_ITEMS = [
   { href: '/simulation', label: 'What-If Simulation', icon: Sparkles },
   { href: '/pipeline', label: 'Pipeline Hub', icon: Cpu },
-  { href: '/gsheet', label: 'Google Sheets', icon: FileSpreadsheet },
-  { href: '/integration', label: 'Sync & Integration', icon: Globe },
 ];
 
 export default function AppShell({
