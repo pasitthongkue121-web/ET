@@ -51,8 +51,8 @@ export default function DigitalTwinPage() {
       setIsBackendOnline(isHealthy);
       if (isHealthy) {
         const [stateRes, roomsRes] = await Promise.all([
-          getTwinState(),
-          getTwinRooms()
+          getTwinState().catch(() => null),
+          getTwinRooms().catch(() => [])
         ]);
         setState(stateRes);
         setRooms(roomsRes);
