@@ -45,16 +45,16 @@ export default function AIForecastPage() {
       setIsBackendOnline(isHealthy);
 
       const [foreRes, modRes, expRes, insRes] = await Promise.all([
-        getPredictionForecast(),
-        getModelBenchmarks(),
-        getPredictionExplanation(),
-        getAutomatedInsights(),
+        getPredictionForecast().catch(() => null),
+        getModelBenchmarks().catch(() => []),
+        getPredictionExplanation().catch(() => null),
+        getAutomatedInsights().catch(() => []),
       ]);
 
-      setForecast(foreRes);
-      setModels(modRes);
-      setExplanation(expRes);
-      setInsights(insRes);
+      if (foreRes) setForecast(foreRes);
+      setModels(modRes as ModelEvaluationMetric[]);
+      if (expRes) setExplanation(expRes);
+      setInsights(insRes as InsightDetectionItem[]);
     } catch (err) {
       console.error('Error loading forecast data:', err);
       setIsBackendOnline(false);
