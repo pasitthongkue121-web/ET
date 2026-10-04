@@ -8,16 +8,12 @@ import {
   startESP32Sim,
   stopESP32Sim,
   sendESP32TestPacket,
-  getGSheetAppsScriptTemplate,
-  getGSheetStatus,
   PipelineHealthResponse,
   ESP32SimStatus,
-  GSheetStatus
-} from '../../lib/api';
+  } from '../../lib/api';
 import {
   Zap, Activity, Cpu, Layers, RefreshCw, CheckCircle, AlertCircle,
-  Copy, ExternalLink, FileSpreadsheet, Globe
-} from '../../components/Icons';
+  Copy, ExternalLink, } from '../../components/Icons';
 
 // ----------------------------------------------------------------------
 // Code Viewer Component
@@ -83,14 +79,11 @@ function StatusPill({ status }: { status: string }) {
 export default function PipelinePage() {
   const [health, setHealth] = useState<PipelineHealthResponse | null>(null);
   const [simStatus, setSimStatus] = useState<ESP32SimStatus | null>(null);
-  const [sheetStatus, setSheetStatus] = useState<GSheetStatus | null>(null);
-  const [appsScriptCode, setAppsScriptCode] = useState<string>('');
-
+    
   // Simulator controls
   const [selectedDevice, setSelectedDevice] = useState<string>('living_room_ac');
   const [sliderWatts, setSliderWatts] = useState<number>(1200);
-  const [simTarget, setSimTarget] = useState<'both' | 'apps_script' | 'direct_db'>('both');
-  const [isStartingSim, setIsStartingSim] = useState(false);
+    const [isStartingSim, setIsStartingSim] = useState(false);
   const [isSendingPacket, setIsSendingPacket] = useState(false);
   const [actionMessage, setActionMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
@@ -101,18 +94,17 @@ export default function PipelinePage() {
       const [h, s, gs] = await Promise.all([
         getPipelineHealth().catch(() => null),
         getESP32SimStatus().catch(() => null),
-        getGSheetStatus().catch(() => null),
+        get().catch(() => null),
       ]);
       setHealth(h);
       setSimStatus(s);
-      setSheetStatus(gs);
-    } catch {}
+          } catch {}
   }, []);
 
   // Auto-poll pipeline STATUS only (does not start simulator or write data)
   useEffect(() => {
     refreshData();
-    getGSheetAppsScriptTemplate().then(t => setAppsScriptCode(t.code)).catch(() => {});
+    ().then(t => setAppsScriptCode(t.code)).catch(() => {});
     const interval = setInterval(refreshData, 5000);
     return () => clearInterval(interval);
   }, [refreshData]);
@@ -127,7 +119,7 @@ export default function PipelinePage() {
         await stopESP32Sim();
         setActionMessage({ type: 'success', text: 'Virtual ESP32 Simulator stopped.' });
       } else {
-        await startESP32Sim(selectedDevice, simTarget, 15, sliderWatts);
+        await startESP32Sim(selectedDevice, 'direct_db', 15, sliderWatts);
         setActionMessage({ type: 'success', text: `Virtual ESP32 Simulator started! Transmitting ${sliderWatts}W every 15s.` });
       }
       await refreshData();
@@ -155,37 +147,23 @@ export default function PipelinePage() {
     }
   };
 
-  const stages = [
+    const stages = [
     {
       num: 1,
-      title: 'ESP32 / Simulation',
-      sub: simStatus?.running ? `${simStatus.packets_sent} pkts transmitted` : 'Virtual or Hardware',
-      status: simStatus?.running ? 'online' : (simStatus?.packets_sent ? 'idle' : 'standby'),
+      title: 'Hardware ESP32',
+      sub: 'Physical IoT Sensors',
+      status: 'online',
       icon: <Cpu className="h-5 w-5 text-sky-400" />
     },
     {
       num: 2,
-      title: 'Google Apps Script',
-      sub: sheetStatus?.connected ? 'doPost & doGet Ready' : 'Needs Web App URL',
-      status: sheetStatus?.connected ? 'online' : 'not_configured',
-      icon: <Globe className="h-5 w-5 text-emerald-400" />
-    },
-    {
-      num: 3,
-      title: 'Google Sheets',
-      sub: sheetStatus?.connected ? `${sheetStatus.last_row_count} rows synced` : 'Cloud Ledger',
-      status: sheetStatus?.connected ? 'online' : 'not_configured',
-      icon: <FileSpreadsheet className="h-5 w-5 text-emerald-400" />
-    },
-    {
-      num: 4,
       title: 'FastAPI Backend',
-      sub: health?.stage4_brain ? `${health.stage4_brain.total_readings} records in DB` : 'AI & Digital Twin',
+      sub: health?.stage4_brain ? ${health.stage4_brain.total_readings} records in DB : 'AI & Digital Twin Database',
       status: 'online',
       icon: <Zap className="h-5 w-5 text-amber-400" />
     },
     {
-      num: 5,
+      num: 3,
       title: 'Website Dashboard',
       sub: 'Live 30s Visualizer',
       status: 'online',
@@ -206,12 +184,10 @@ export default function PipelinePage() {
                 <Zap className="h-5 w-5" />
               </span>
               <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white">
-                5-Stage IoT Telemetry Pipeline
+                IoT Telemetry Pipeline
               </h1>
             </div>
-            <p className="mt-1 text-sm text-slate-400">
-              ESP32 / Simulation ➔ Google Apps Script ➔ Google Sheets ➔ FastAPI ➔ Website
-            </p>
+            <p className="mt-1 text-sm text-slate-400">Hardware ESP32 ? FastAPI Backend ? Website Dashboard</p>
           </div>
 
           <div className="flex items-center gap-2">
@@ -226,7 +202,7 @@ export default function PipelinePage() {
         </div>
 
         {/* ------------------------------------------------------------- */}
-        {/* 5-STAGE PIPELINE FLOWCHART                                    */}
+        {/* PIPELINE FLOWCHART                                    */}
         {/* ------------------------------------------------------------- */}
         <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 backdrop-blur">
           <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-6 flex items-center gap-2">
