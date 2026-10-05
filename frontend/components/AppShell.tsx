@@ -10,8 +10,6 @@ import {
   Layers,
   Clock,
   Brain,
-  Globe,
-  FileSpreadsheet,
   BatteryCharging,
   Sliders,
   RefreshCw,
