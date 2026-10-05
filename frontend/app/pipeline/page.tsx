@@ -91,14 +91,13 @@ export default function PipelinePage() {
 
   const refreshData = useCallback(async () => {
     try {
-      const [h, s, gs] = await Promise.all([
+      const [h, s] = await Promise.all([
         getPipelineHealth().catch(() => null),
         getESP32SimStatus().catch(() => null),
-        get().catch(() => null),
       ]);
       setHealth(h);
       setSimStatus(s);
-          } catch {}
+    } catch {}
   }, []);
 
   // Auto-poll pipeline STATUS only (does not start simulator or write data)
@@ -136,7 +135,7 @@ export default function PipelinePage() {
       const res = await sendESP32TestPacket(selectedDevice, sliderWatts, 230.0);
       setActionMessage({
         type: 'success',
-        text: `Telemetry packet injected! (${res.payload.device_id}: ${res.payload.power_w}W, ${res.payload.voltage}V) -> Check Google Sheet & Dashboard!`
+        text: `Telemetry packet injected! (${res.payload?.device_id || selectedDevice}: ${res.payload?.power_w || sliderWatts}W, 230V) -> Check Database & Dashboard!`
       });
       await refreshData();
     } catch (err: any) {
@@ -186,7 +185,7 @@ export default function PipelinePage() {
                 IoT Telemetry Pipeline
               </h1>
             </div>
-            <p className="mt-1 text-sm text-slate-400">Hardware ESP32 ? FastAPI Backend ? Website Dashboard</p>
+            <p className="mt-1 text-sm text-slate-400">Hardware ESP32 ➔ FastAPI Backend ➔ SQLite Database ➔ Website Dashboard</p>
           </div>
 
           <div className="flex items-center gap-2">
@@ -209,11 +208,11 @@ export default function PipelinePage() {
             Live Pipeline Architecture
           </h2>
 
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-4 relative">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 relative">
             {stages.map((stage, idx) => (
               <div
                 key={stage.num}
-                className="flex flex-col items-center text-center p-4 rounded-xl border border-slate-800 bg-slate-950/80 relative group hover:border-slate-700 transition"
+                className="flex flex-col items-center text-center p-5 rounded-xl border border-slate-800 bg-slate-950/80 relative group hover:border-slate-700 transition"
               >
                 <div className="absolute top-2 right-2">
                   <StatusPill status={stage.status} />
@@ -229,7 +228,7 @@ export default function PipelinePage() {
 
                 {/* Arrow to next hop */}
                 {idx < stages.length - 1 && (
-                  <div className="hidden md:block absolute -right-3 top-1/2 -translate-y-1/2 z-10 text-slate-600">
+                  <div className="hidden md:block absolute -right-4 top-1/2 -translate-y-1/2 z-10 text-slate-600 font-bold text-lg">
                     ➔
                   </div>
                 )}
@@ -291,7 +290,7 @@ export default function PipelinePage() {
                   Virtual ESP32 Device Console
                 </h3>
                 <p className="text-xs text-slate-400 mt-1">
-                  จำลองการส่งข้อมูลเสมือนมีบอร์ด ESP32 วัดพลังงานจริง ยิงเข้า Google Sheet และแสดงผลบนแดชบอร์ด
+                  จำลองการส่งข้อมูลเสมือนมีบอร์ด ESP32 วัดพลังงานจริง บันทึกลง Database และแสดงผลบนแดชบอร์ดทันที
                 </p>
               </div>
 
