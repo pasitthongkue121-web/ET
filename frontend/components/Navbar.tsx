@@ -11,8 +11,6 @@ import {
   Sliders,
   Clock,
   Brain,
-  Globe,
-  FileSpreadsheet,
   BatteryCharging
 } from './Icons';
 
@@ -33,8 +31,6 @@ const PRIMARY_LINKS = [
 const UTILITY_LINKS = [
   { href: '/simulation', label: 'Simulation' },
   { href: '/pipeline', label: 'Pipeline' },
-  { href: '/gsheet', label: 'GSheet' },
-  { href: '/integration', label: 'Sync' },
 ];
 
 export default function Navbar({ isBackendOnline = true }: NavbarProps) {
