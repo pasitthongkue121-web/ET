@@ -179,9 +179,9 @@ def get_pipeline_health():
         },
         "stage2_bridge": {
             "name": "Google Apps Script",
-            "url_configured": bool(sheet_status["web_app_url"]),
-            "last_http_status": sim_status["last_status_code"] or 200 if sheet_status["connected"] else None,
-            "status": "online" if sheet_status["connected"] else "not_configured"
+            "url_configured": bool(sheet_status.get("web_app_url")),
+            "last_http_status": sim_status.get("last_status_code", 200) if sheet_status.get("connected") else None,
+            "status": "online" if sheet_status.get("connected") else "not_configured"
         },
         "stage3_ledger": {
             "name": "Google Sheets",
