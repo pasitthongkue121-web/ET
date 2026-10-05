@@ -415,14 +415,14 @@ function SimulationStudioContent() {
                     <span className="text-[11px] text-slate-400 font-medium">Monthly Energy</span>
                     <div className="mt-1 flex items-baseline justify-between">
                       <span className="text-base font-bold text-white">
-                        {activeResult.simulated_monthly_kwh.toFixed(1)}
+                        {(activeResult.simulated_monthly_kwh ?? 0).toFixed(1)}
                       </span>
                       <span className="text-[10px] text-slate-500 line-through">
-                        {activeResult.current_monthly_kwh.toFixed(1)}
+                        {(activeResult.current_monthly_kwh ?? 0).toFixed(1)}
                       </span>
                     </div>
                     <div className="mt-1 text-xs font-bold text-emerald-400">
-                      ↓ {activeResult.energy_saving_kwh.toFixed(1)} kWh (-{activeResult.energy_saving_pct.toFixed(1)}%)
+                      ↓ {(activeResult.energy_saving_kwh ?? 0).toFixed(1)} kWh (-{(activeResult.energy_saving_pct ?? 0).toFixed(1)}%)
                     </div>
                   </div>
 
@@ -431,14 +431,14 @@ function SimulationStudioContent() {
                     <span className="text-[11px] text-slate-400 font-medium">Monthly Cost</span>
                     <div className="mt-1 flex items-baseline justify-between">
                       <span className="text-base font-bold text-white">
-                        ฿{activeResult.simulated_monthly_cost_thb.toFixed(0)}
+                        ฿{(activeResult.simulated_monthly_cost_thb ?? 0).toFixed(0)}
                       </span>
                       <span className="text-[10px] text-slate-500 line-through">
-                        ฿{activeResult.current_monthly_cost_thb.toFixed(0)}
+                        ฿{(activeResult.current_monthly_cost_thb ?? 0).toFixed(0)}
                       </span>
                     </div>
                     <div className="mt-1 text-xs font-bold text-emerald-400">
-                      ↓ ฿{activeResult.cost_saving_thb.toFixed(0)} (-{activeResult.cost_saving_pct.toFixed(1)}%)
+                      ↓ ฿{(activeResult.cost_saving_thb ?? 0).toFixed(0)} (-{(activeResult.cost_saving_pct ?? 0).toFixed(1)}%)
                     </div>
                   </div>
 
@@ -447,14 +447,14 @@ function SimulationStudioContent() {
                     <span className="text-[11px] text-slate-400 font-medium">Peak Power</span>
                     <div className="mt-1 flex items-baseline justify-between">
                       <span className="text-base font-bold text-white">
-                        {activeResult.simulated_peak_kw.toFixed(2)} kW
+                        {(activeResult.simulated_peak_kw ?? 0).toFixed(2)} kW
                       </span>
                       <span className="text-[10px] text-slate-500 line-through">
-                        {activeResult.current_peak_kw.toFixed(2)}
+                        {(activeResult.current_peak_kw ?? 0).toFixed(2)}
                       </span>
                     </div>
                     <div className="mt-1 text-xs font-bold text-sky-400">
-                      ↓ {activeResult.peak_reduction_kw.toFixed(2)} kW (-{activeResult.peak_reduction_pct.toFixed(1)}%)
+                      ↓ {(activeResult.peak_reduction_kw ?? 0).toFixed(2)} kW (-{(activeResult.peak_reduction_pct ?? 0).toFixed(1)}%)
                     </div>
                   </div>
 
@@ -462,7 +462,7 @@ function SimulationStudioContent() {
                   <div className="bg-slate-950/60 p-3.5 rounded-xl border border-slate-800">
                     <span className="text-[11px] text-slate-400 font-medium">CO₂ Reduction</span>
                     <p className="text-base font-bold text-emerald-400 mt-1">
-                      -{activeResult.co2_reduction_kg.toFixed(1)} <span className="text-xs text-slate-400 font-normal">kg</span>
+                      -{(activeResult.co2_reduction_kg ?? 0).toFixed(1)} <span className="text-xs text-slate-400 font-normal">kg</span>
                     </p>
                     <div className="mt-1 text-[10px] text-slate-400">
                       Factor 0.4999 kg/kWh
@@ -615,25 +615,25 @@ function SimulationStudioContent() {
                           </span>
                         )}
                       </td>
-                      <td className="py-3.5 px-4 text-slate-400">{sc.description}</td>
+                      <td className="py-3.5 px-4 text-slate-400">{sc.description || '-'}</td>
                       <td className="py-3.5 px-4 text-right font-medium text-slate-200">
-                        {sc.energy_kwh.toFixed(1)}
+                        {(sc.energy_kwh ?? 0).toFixed(1)}
                       </td>
                       <td className="py-3.5 px-4 text-right font-medium text-slate-200">
-                        ฿{sc.cost_thb.toFixed(0)}
+                        ฿{(sc.cost_thb ?? 0).toFixed(0)}
                       </td>
                       <td className="py-3.5 px-4 text-right font-bold text-emerald-400">
-                        {sc.saving_thb > 0 ? `+฿${sc.saving_thb.toFixed(0)}` : '0'}
+                        {(sc.saving_thb ?? 0) > 0 ? `+฿${(sc.saving_thb ?? 0).toFixed(0)}` : '0'}
                       </td>
                       <td className="py-3.5 px-4 text-right font-medium text-sky-300">
-                        {sc.peak_kw.toFixed(2)}
+                        {(sc.peak_kw ?? 0).toFixed(2)}
                       </td>
                       <td className="py-3.5 px-4 text-right font-bold text-emerald-400">
-                        {sc.reduction_pct > 0 ? `-${sc.reduction_pct.toFixed(1)}%` : '0%'}
+                        {(sc.reduction_pct ?? 0) > 0 ? `-${(sc.reduction_pct ?? 0).toFixed(1)}%` : '0%'}
                       </td>
                       <td className="py-3.5 px-4 text-right">
                         <span className="px-2.5 py-1 rounded-md bg-slate-800 font-bold text-amber-400">
-                          {sc.score ? sc.score.toFixed(1) : '--'}
+                          {sc.score != null ? sc.score.toFixed(1) : '--'}
                         </span>
                       </td>
                     </tr>
