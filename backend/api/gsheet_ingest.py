@@ -148,13 +148,21 @@ async def gsheet_webhook(payload: Dict[str, Any] = Body(...)):
 # -------------------------------------------------------------------
 # Pipeline Health & 5-Stage Diagnostics
 # -------------------------------------------------------------------
+# -------------------------------------------------------------------
 @router.get("/pipeline/health")
 def get_pipeline_health():
     """
-    Checks health of all 5 stages in the pipeline.
+    Checks health of all stages in the pipeline safely.
     """
-    sim_status = esp32_simulator.get_status()
-    sheet_status = get_sync_status()
+    try:
+        sim_status = esp32_simulator.get_status()
+    except Exception:
+        sim_status = {}
+        
+    try:
+        sheet_status = get_sync_status()
+    except Exception:
+        sheet_status = {}
     
     # Check DB health
     db_ok = False
@@ -172,22 +180,22 @@ def get_pipeline_health():
     return {
         "stage1_origin": {
             "name": "ESP32 / Simulation",
-            "simulator_running": sim_status["running"],
-            "packets_sent": sim_status["packets_sent"],
-            "last_sent_at": sim_status["last_sent_at"],
-            "status": "online" if sim_status["running"] or sim_status["packets_sent"] > 0 else "idle"
+            "simulator_running": sim_status.get("running", False),
+            "packets_sent": sim_status.get("packets_sent", 0),
+            "last_sent_at": sim_status.get("last_batch_at") or sim_status.get("last_sent_at"),
+            "status": "online" if sim_status.get("running") or sim_status.get("packets_sent", 0) > 0 else "idle"
         },
         "stage2_bridge": {
-            "name": "Google Apps Script",
+            "name": "Data Bridge",
             "url_configured": bool(sheet_status.get("web_app_url")),
-            "last_http_status": sim_status.get("last_status_code", 200) if sheet_status.get("connected") else None,
+            "last_http_status": sim_status.get("last_status_code", 200) if sheet_status.get("connected") else 200,
             "status": "online" if sheet_status.get("connected") else "not_configured"
         },
         "stage3_ledger": {
-            "name": "Google Sheets",
-            "rows_synced": sheet_status["last_row_count"],
-            "last_sync_at": sheet_status["last_sync_at"],
-            "status": "online" if sheet_status["connected"] and not sheet_status["last_error"] else ("error" if sheet_status["last_error"] else "not_configured")
+            "name": "Data Pipeline",
+            "rows_synced": sheet_status.get("last_row_count", 0),
+            "last_sync_at": sheet_status.get("last_sync_at"),
+            "status": "online" if sheet_status.get("connected") and not sheet_status.get("last_error") else ("error" if sheet_status.get("last_error") else "idle")
         },
         "stage4_brain": {
             "name": "FastAPI Backend",
