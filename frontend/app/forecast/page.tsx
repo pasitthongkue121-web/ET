@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import Navbar from '../../components/Navbar';
+import AppShell from '../../components/AppShell';
 import {
   getPredictionForecast,
   getModelBenchmarks,
@@ -68,10 +68,8 @@ export default function AIForecastPage() {
   }, [loadData]);
 
   return (
-    <div className="min-h-screen bg-[#070b19] text-slate-100 selection:bg-blue-600 selection:text-white">
-      <Navbar isBackendOnline={isBackendOnline} />
-
-      <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8 space-y-6">
+    <AppShell isBackendOnline={isBackendOnline} onRefresh={loadData} isLoading={isLoading}>
+      <div className="space-y-6">
         {/* Header */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -423,7 +421,7 @@ export default function AIForecastPage() {
             ))}
           </div>
         </div>
-      </main>
-    </div>
+      </div>
+    </AppShell>
   );
 }
