@@ -90,12 +90,16 @@ def init_db():
             ("circuit_lighting", "วงจรแสงสว่าง (Lighting)", "main_panel", 800.0, 0, "lighting"),
             ("circuit_receptacle", "วงจรเต้ารับ (Receptacle)", "main_panel", 2000.0, 0, "receptacle"),
             ("circuit_heavy_load", "โหลดหนัก (Heavy Load)", "main_panel", 5000.0, 0, "heavy_load"),
-            ("circuit_solar", "Solar PV (On-Grid)", "main_panel", -5000.0, 0, "solar"),
+            ("circuit_solar", "Solar PV (On-Grid)", "main_panel", 5000.0, 0, "solar"),
         ]
         cursor.executemany("""
             INSERT INTO devices (device_id, name, room_id, rated_power, status, category)
             VALUES (?, ?, ?, ?, ?, ?)
         """, default_devices)
+
+    # Sanitize any legacy negative ratings or readings
+    cursor.execute("UPDATE devices SET rated_power = 5000.0 WHERE device_id = 'circuit_solar' AND rated_power < 0;")
+    cursor.execute("UPDATE energy_readings SET power = ABS(power), energy = ABS(energy) WHERE power < 0 OR energy < 0;")
 
     conn.commit()
     conn.close()
