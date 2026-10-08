@@ -18,6 +18,10 @@ class BaseEnergyRepository(ABC):
         pass
 
     @abstractmethod
+    def create_device(self, device_data: Dict[str, Any]) -> Dict[str, Any]:
+        pass
+
+    @abstractmethod
     def update_device_status(self, device_id: str, status: bool, temperature: Optional[float] = None) -> None:
         pass
 
@@ -76,6 +80,25 @@ class SQLiteEnergyRepository(BaseEnergyRepository):
         row = cursor.fetchone()
         conn.close()
         return dict(row) if row else None
+
+    def create_device(self, device_data: Dict[str, Any]) -> Dict[str, Any]:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT OR REPLACE INTO devices (device_id, name, room_id, rated_power, status, temperature, category)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (
+            device_data["device_id"],
+            device_data["name"],
+            device_data.get("room_id", "main_panel"),
+            float(device_data.get("rated_power", 1000.0)),
+            int(device_data.get("status", 0)),
+            device_data.get("temperature", 25.0),
+            device_data.get("category", "general")
+        ))
+        conn.commit()
+        conn.close()
+        return device_data
 
     def update_device_status(self, device_id: str, status: bool, temperature: Optional[float] = None) -> None:
         conn = get_connection()
