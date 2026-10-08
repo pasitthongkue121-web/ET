@@ -69,5 +69,33 @@ def init_db():
     );
     """)
 
+    # Seed default rooms if empty
+    cursor.execute("SELECT COUNT(*) FROM rooms")
+    if cursor.fetchone()[0] == 0:
+        default_rooms = [
+            ("main_panel", "Main Panel", 1, "zap"),
+            ("living_room", "Living Room", 1, "sofa"),
+            ("bedroom_1", "Bedroom 1", 1, "bed"),
+            ("bedroom_2", "Bedroom 2", 2, "bed"),
+            ("kitchen", "Kitchen", 1, "chef-hat"),
+            ("bathroom", "Bathroom", 1, "shower-head"),
+            ("garage", "Garage", 0, "car"),
+        ]
+        cursor.executemany("INSERT INTO rooms (id, name, floor, icon) VALUES (?, ?, ?, ?)", default_rooms)
+
+    # Seed default devices if empty
+    cursor.execute("SELECT COUNT(*) FROM devices")
+    if cursor.fetchone()[0] == 0:
+        default_devices = [
+            ("circuit_lighting", "วงจรแสงสว่าง (Lighting)", "main_panel", 800.0, 0, "lighting"),
+            ("circuit_receptacle", "วงจรเต้ารับ (Receptacle)", "main_panel", 2000.0, 0, "receptacle"),
+            ("circuit_heavy_load", "โหลดหนัก (Heavy Load)", "main_panel", 5000.0, 0, "heavy_load"),
+            ("circuit_solar", "Solar PV (On-Grid)", "main_panel", -5000.0, 0, "solar"),
+        ]
+        cursor.executemany("""
+            INSERT INTO devices (device_id, name, room_id, rated_power, status, category)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, default_devices)
+
     conn.commit()
     conn.close()
