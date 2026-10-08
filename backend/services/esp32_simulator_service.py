@@ -196,8 +196,10 @@ class CircuitEnergySimulator:
         repo.insert_readings_bulk(all_readings)
         logger.info(f"{logger_prefix} Inserted {len(all_readings)} historical readings.")
 
-    def start(self) -> Dict:
+    def start(self, device_id: Optional[str] = None, target: Optional[str] = None, interval: Optional[int] = None) -> Dict:
         with self._lock:
+            if interval:
+                self.interval_seconds = interval
             if self._running:
                 return {"status": "already_running"}
             self._stop_event.clear()
@@ -214,6 +216,43 @@ class CircuitEnergySimulator:
             self._running = False
         return {"status": "stopped"}
 
+    def set_override(self, power_watts: float):
+        # Override for testing
+        pass
+
+    def generate_reading(self, device_id: str = "circuit_lighting", power_watts: float = 1200.0) -> Dict[str, Any]:
+        dt = datetime.now()
+        voltage = 230.0
+        current = round(abs(power_watts) / voltage, 2)
+        return {
+            "device_id": device_id,
+            "name": device_id.replace("_", " ").title(),
+            "room_id": "main_panel",
+            "category": "appliance",
+            "timestamp": dt.strftime("%Y-%m-%d %H:%M:%S"),
+            "voltage": voltage,
+            "current": current,
+            "power": round(power_watts, 1),
+            "power_w": round(power_watts, 1),
+            "energy": round(power_watts * (15.0 / 3600.0) / 1000.0, 4),
+            "temperature": 28.5,
+            "humidity": 65.0,
+            "occupancy": 1
+        }
+
+    def send_packet(self, reading: Dict[str, Any]) -> Dict[str, Any]:
+        from backend.database.repository import get_repository
+        repo = get_repository()
+        repo.insert_reading(reading)
+        with self._lock:
+            self.packets_sent += 1
+            self.last_batch_at = datetime.now().isoformat()
+        return {
+            "success": True,
+            "payload": reading,
+            "results": {"status": "injected"}
+        }
+
     def get_status(self) -> Dict:
         with self._lock:
             return {
@@ -223,6 +262,7 @@ class CircuitEnergySimulator:
                 "packets_sent": self.packets_sent,
                 "packets_failed": self.packets_failed,
                 "last_batch_at": self.last_batch_at,
+                "last_sent_at": self.last_batch_at,
                 "last_error": self.last_error,
                 "solar_mode": self.solar_mode
             }
