@@ -548,6 +548,56 @@ export interface HourlyTOUEnergyRecord {
   grid_export_kw: number;
 }
 
+export interface NormalProgressiveStep {
+  label: string;
+  kwh: number;
+  rate: number;
+  cost: number;
+}
+
+export interface NormalBillBreakdown {
+  meter_type: string;
+  category: string;
+  total_kwh: number;
+  steps_breakdown: NormalProgressiveStep[];
+  base_energy_cost_thb: number;
+  service_charge_thb: number;
+  ft_rate_thb: number;
+  ft_cost_thb: number;
+  subtotal_thb: number;
+  vat_pct: number;
+  vat_cost_thb: number;
+  total_bill_thb: number;
+  effective_rate_thb_kwh: number;
+}
+
+export interface TOUBillBreakdown {
+  meter_type: string;
+  category: string;
+  on_peak_kwh: number;
+  off_peak_kwh: number;
+  total_import_kwh: number;
+  on_peak_base_rate: number;
+  off_peak_base_rate: number;
+  on_peak_with_ft: number;
+  off_peak_with_ft: number;
+  on_peak_cost_thb: number;
+  off_peak_cost_thb: number;
+  base_energy_cost_thb: number;
+  service_charge_thb: number;
+  ft_rate_thb: number;
+  ft_cost_thb: number;
+  subtotal_thb: number;
+  vat_pct: number;
+  vat_cost_thb: number;
+  total_import_bill_thb: number;
+  export_kwh: number;
+  export_rate_thb: number;
+  export_income_thb: number;
+  total_bill_thb: number;
+  effective_rate_thb_kwh: number;
+}
+
 export interface TOUSimulateResponse {
   scenario: {
     solar_mode: string;
@@ -593,6 +643,9 @@ export interface TOUSimulateResponse {
     estimated_investment_thb: number;
     payback_period_years: number;
   };
+  official_tariffs?: any;
+  normal_bill_breakdown?: NormalBillBreakdown;
+  tou_bill_breakdown?: TOUBillBreakdown;
   hourly_chart: HourlyTOUEnergyRecord[];
 }
 
