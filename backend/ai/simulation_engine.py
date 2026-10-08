@@ -31,8 +31,9 @@ class WhatIfSimulationEngine:
         init_db()
         conn = get_connection()
         query = """
-            SELECT timestamp, device_id, power, energy, temperature
+            SELECT timestamp, device_id, ABS(power) as power, ABS(energy) as energy, temperature
             FROM energy_readings
+            WHERE device_id != 'circuit_solar'
             ORDER BY timestamp ASC
         """
         try:
@@ -197,12 +198,14 @@ class WhatIfSimulationEngine:
         
         hourly_comparison = []
         for h in range(24):
+            base_p = max(0.0, float(hourly_base.get(h, 0.0)))
+            sim_p = max(0.0, float(hourly_sim.get(h, 0.0)))
             hourly_comparison.append({
                 "hour": h,
                 "hour_label": f"{h:02d}:00",
-                "current_power_w": round(float(hourly_base.get(h, 0.0)), 1),
-                "simulated_power_w": round(float(hourly_sim.get(h, 0.0)), 1),
-                "saving_w": round(max(0.0, float(hourly_base.get(h, 0.0) - hourly_sim.get(h, 0.0))), 1)
+                "current_power_w": round(base_p, 1),
+                "simulated_power_w": round(sim_p, 1),
+                "saving_w": round(max(0.0, base_p - sim_p), 1)
             })
 
         sim_id = f"sim_{uuid.uuid4().hex[:8]}"
