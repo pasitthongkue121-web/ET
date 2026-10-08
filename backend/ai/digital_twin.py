@@ -62,22 +62,35 @@ class DigitalTwinEngine:
         latest_readings = repo.get_latest_device_readings()
 
         total_devices = len(devices)
-        active_devices = sum(1 for dev in latest_readings if dev.get("power", 0.0) > 15.0)
-        current_power = sum(dev.get("power", 0.0) for dev in latest_readings) / 1000.0
+        consumption_readings = [
+            dev for dev in latest_readings 
+            if dev.get("category") != "solar" and not dev.get("is_generation") and dev.get("device_id") != "circuit_solar"
+        ] or latest_readings
+
+        active_devices = sum(1 for dev in consumption_readings if float(dev.get("power", 0.0)) > 15.0)
+        current_power = sum(max(0.0, float(dev.get("power", 0.0))) for dev in consumption_readings) / 1000.0
 
         today_readings = repo.get_readings_timeseries(start_of_day, now_str)
-        today_kwh = sum(r.get("energy", 0.0) for r in today_readings)
+        today_consumption = [
+            r for r in today_readings 
+            if r.get("category") != "solar" and not r.get("is_generation") and r.get("device_id") != "circuit_solar"
+        ] or today_readings
+        today_kwh = max(0.0, sum(max(0.0, float(r.get("energy", 0.0))) for r in today_consumption))
 
         month_readings = repo.get_readings_timeseries(start_of_month, now_str)
-        month_kwh = sum(r.get("energy", 0.0) for r in month_readings)
+        month_consumption = [
+            r for r in month_readings
+            if r.get("category") != "solar" and not r.get("is_generation") and r.get("device_id") != "circuit_solar"
+        ] or month_readings
+        month_kwh = max(0.0, sum(max(0.0, float(r.get("energy", 0.0))) for r in month_consumption))
 
-        cost_result = calculate_cost_from_readings(today_readings)
+        cost_result = calculate_cost_from_readings(today_consumption)
         cost_thb = cost_result.get("total_cost_thb", 0.0) if isinstance(cost_result, dict) else float(cost_result)
 
         from backend.database.models import DigitalTwinState as DTState
         return DTState(
             timestamp=now_str,
-            total_power_kw=round(current_power, 2),
+            total_power_kw=round(max(0.0, current_power), 2),
             temperature_c=25.0,
             humidity_pct=60.0,
             occupancy=active_devices > 0,
