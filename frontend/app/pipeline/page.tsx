@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import Navbar from '../../components/Navbar';
+import AppShell from '../../components/AppShell';
 import {
   getPipelineHealth,
   getESP32SimStatus,
@@ -170,10 +170,8 @@ export default function PipelinePage() {
   ];
 
   return (
-    <div className="min-h-screen bg-[#070b19] text-slate-100">
-      <Navbar isBackendOnline={true} />
-
-      <main className="mx-auto max-w-6xl px-4 py-8 space-y-8">
+    <AppShell isBackendOnline={true} onRefresh={refreshData}>
+      <div className="space-y-8">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
@@ -451,7 +449,7 @@ void sendTelemetry(float power_w, float energy_kwh) {
             />
           </div>
         )}
-      </main>
-    </div>
+      </div>
+    </AppShell>
   );
 }
