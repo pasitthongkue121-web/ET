@@ -53,59 +53,68 @@ class EnergyService:
         if not raw_data:
             return {"period": period, "timeseries": [], "total_energy_kwh": 0.0, "total_cost_thb": 0.0}
 
+        # If overall house profile (device_id is None), isolate consumption loads
+        if not device_id:
+            raw_data = [
+                r for r in raw_data 
+                if r.get("category") != "solar" and not r.get("is_generation") and r.get("device_id") != "circuit_solar"
+            ] or raw_data
+
         df = pd.DataFrame(raw_data)
         df["timestamp"] = pd.to_datetime(df["timestamp"], format='mixed')
+        df["power"] = df["power"].astype(float).abs()
+        df["energy"] = df["energy"].astype(float).abs()
+        df["voltage"] = df["voltage"].astype(float).abs()
+        df["current"] = df["current"].astype(float).abs()
+        df["temperature"] = df["temperature"].astype(float)
+        df["occupancy"] = df["occupancy"].fillna(1).astype(int)
 
-        # Downsample for smooth chart rendering based on period
+        # Step 1: Sum across concurrent circuit branches for each exact timestamp
+        if not device_id:
+            ts_summary = df.groupby("timestamp", as_index=False).agg({
+                "power": "sum",
+                "energy": "sum",
+                "voltage": "mean",
+                "current": "sum",
+                "temperature": "mean",
+                "occupancy": "max"
+            })
+        else:
+            ts_summary = df
+
+        # Step 2: Downsample into chart bins based on period
         if period == "today":
-            # Keep 15-min or hourly
-            df["time_label"] = df["timestamp"].dt.strftime("%H:%M")
-            grouped = df.groupby("time_label", as_index=False).agg({
-                "power": "mean",
-                "energy": "sum",
-                "voltage": "mean",
-                "current": "sum",
-                "temperature": "mean",
-                "occupancy": "max"
-            })
+            ts_summary["time_label"] = ts_summary["timestamp"].dt.strftime("%H:%M")
         elif period == "7d":
-            # Group by 2 hours for clarity
-            df["time_label"] = df["timestamp"].dt.strftime("%d %b %H:00")
-            grouped = df.groupby("time_label", as_index=False).agg({
-                "power": "mean",
-                "energy": "sum",
-                "voltage": "mean",
-                "current": "sum",
-                "temperature": "mean",
-                "occupancy": "max"
-            })
+            ts_summary["time_label"] = ts_summary["timestamp"].dt.strftime("%d %b %H:00")
         else: # 30d
-            # Group by day
-            df["time_label"] = df["timestamp"].dt.strftime("%d %b")
-            grouped = df.groupby("time_label", as_index=False).agg({
-                "power": "mean",
-                "energy": "sum",
-                "voltage": "mean",
-                "current": "sum",
-                "temperature": "mean",
-                "occupancy": "max"
-            })
+            ts_summary["time_label"] = ts_summary["timestamp"].dt.strftime("%d %b")
+
+        grouped = ts_summary.groupby("time_label", as_index=False).agg({
+            "power": "mean",
+            "energy": "sum",
+            "voltage": "mean",
+            "current": "mean",
+            "temperature": "mean",
+            "occupancy": "max"
+        })
 
         timeseries = []
         for _, row in grouped.iterrows():
+            p_w = max(0.0, float(row["power"]))
             timeseries.append({
                 "time": str(row["time_label"]),
-                "power_w": round(float(row["power"]), 1),
-                "power_kw": round(float(row["power"]) / 1000.0, 2),
-                "energy_kwh": round(float(row["energy"]), 3),
-                "voltage": round(float(row["voltage"]), 1),
-                "current_a": round(float(row["current"]), 2),
+                "power_w": round(p_w, 1),
+                "power_kw": round(p_w / 1000.0, 2),
+                "energy_kwh": round(max(0.0, float(row["energy"])), 3),
+                "voltage": round(max(0.0, float(row["voltage"])), 1),
+                "current_a": round(max(0.0, float(row["current"])), 2),
                 "temperature": round(float(row["temperature"]), 1),
-                "cost_thb": round(float(row["energy"]) * ELECTRICITY_RATE_PER_KWH, 2),
+                "cost_thb": round(max(0.0, float(row["energy"])) * ELECTRICITY_RATE_PER_KWH, 2),
                 "occupancy": bool(row["occupancy"])
             })
 
-        total_energy = round(df["energy"].sum(), 2)
+        total_energy = round(max(0.0, float(ts_summary["energy"].sum())), 2)
         total_cost = round(total_energy * ELECTRICITY_RATE_PER_KWH, 2)
 
         return {
