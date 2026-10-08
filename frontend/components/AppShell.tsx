@@ -11,6 +11,7 @@ import {
   Clock,
   Brain,
   BatteryCharging,
+  TouMeterIcon,
   Sliders,
   RefreshCw,
   Sparkles,
@@ -19,8 +20,6 @@ import {
 } from './Icons';
 import ResetDataModal from './ResetDataModal';
 import LogoutButton from './LogoutButton';
-
-
 
 interface AppShellProps {
   children: React.ReactNode;
@@ -33,12 +32,12 @@ interface AppShellProps {
 
 const NAV_ITEMS = [
   { href: '/', label: 'Dashboard', icon: Activity, badge: null },
-  { href: '/monitor', label: 'Energy Monitor', icon: Zap, badge: 'Live' },
+  { href: '/monitor', label: 'Energy Monitor', icon: Zap, badge: 'LIVE' },
   { href: '/routine', label: 'Analytics', icon: Clock, badge: null },
   { href: '/forecast', label: 'AI Forecast', icon: Brain, badge: 'ML' },
   { href: '/twin', label: 'Digital Twin', icon: Layers, badge: null },
   { href: '/energy-plan', label: 'Devices & Plan', icon: Sliders, badge: null },
-  { href: '/tou-calculator', label: 'TOU & Solar & EV', icon: BatteryCharging, badge: 'Smart' },
+  { href: '/tou-calculator', label: 'TOU & Solar & EV', icon: TouMeterIcon, badge: 'SMART' },
 ];
 
 const SECONDARY_ITEMS = [
@@ -66,9 +65,9 @@ export default function AppShell({
   }, [pathname]);
 
   return (
-    <div className="min-h-screen bg-[#070b19] text-slate-100 flex flex-col antialiased">
+    <div className="h-screen bg-[#070b19] text-slate-100 flex flex-col antialiased overflow-hidden">
       {/* ─── Top Header (Compact & Clean) ─────────────────────────── */}
-      <header className="sticky top-0 z-40 h-13 border-b border-slate-800/80 bg-slate-950/90 backdrop-blur-md flex items-center justify-between px-3 sm:px-5">
+      <header className="sticky top-0 z-40 h-13 border-b border-slate-800/80 bg-slate-950/90 backdrop-blur-md flex items-center justify-between px-3 sm:px-5 shrink-0">
         <div className="flex items-center gap-3">
           {/* Mobile hamburger button */}
           <button
@@ -149,20 +148,18 @@ export default function AppShell({
         </div>
       </header>
 
-
-
       {/* ─── Main Content Body with Sidebar ────────────────────────── */}
       <div className="flex-1 flex overflow-hidden">
         {/* Left Sidebar (Desktop / Laptop) */}
         <aside
-          className={`hidden lg:flex flex-col border-r border-slate-800/80 bg-slate-950/70 transition-all duration-200 select-none ${
-            isCollapsed ? 'w-16' : 'w-56'
+          className={`hidden lg:flex flex-col border-r border-slate-800/80 bg-slate-950/80 transition-all duration-200 select-none shrink-0 ${
+            isCollapsed ? 'w-16' : 'w-60'
           }`}
         >
           {/* Navigation Links */}
-          <div className="flex-1 py-3 px-2 space-y-1 overflow-y-auto">
-            <div className={`px-2 pb-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400 ${isCollapsed ? 'text-center' : ''}`}>
-              {isCollapsed ? '•••' : 'Main Menu'}
+          <div className="flex-1 py-4 px-2.5 space-y-1 overflow-y-auto">
+            <div className={`px-3 pb-2 text-[11px] font-bold uppercase tracking-wider text-slate-400 ${isCollapsed ? 'text-center' : ''}`}>
+              {isCollapsed ? '•••' : 'MAIN MENU'}
             </div>
 
             {NAV_ITEMS.map(item => {
@@ -173,21 +170,21 @@ export default function AppShell({
                   key={item.href}
                   href={item.href}
                   title={isCollapsed ? item.label : undefined}
-                  className={`flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-xs font-medium transition-colors ${
+                  className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-xs transition-colors group ${
                     isActive
-                      ? 'bg-blue-600 text-white font-semibold shadow-sm'
-                      : 'text-slate-300 hover:text-white hover:bg-slate-850 hover:bg-slate-900/80'
+                      ? 'bg-blue-600 text-white font-semibold shadow-md shadow-blue-500/25'
+                      : 'text-slate-300 hover:text-white hover:bg-slate-900/80 font-medium'
                   }`}
                 >
-                  <Icon className={`h-4 w-4 shrink-0 ${isActive ? 'text-white' : 'text-slate-400'}`} />
+                  <Icon className={`h-4.5 w-4.5 shrink-0 ${isActive ? 'text-white' : 'text-slate-400 group-hover:text-slate-200'}`} />
                   {!isCollapsed && (
                     <span className="truncate flex-1">{item.label}</span>
                   )}
                   {!isCollapsed && item.badge && (
-                    <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded-full uppercase ${
-                      item.badge === 'Live' ? 'bg-emerald-500/20 text-emerald-300' :
-                      item.badge === 'Smart' ? 'bg-amber-500/20 text-amber-300' :
-                      'bg-sky-500/20 text-sky-300'
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider shrink-0 ${
+                      item.badge === 'LIVE' ? 'bg-[#062e24] text-[#22c55e] border border-[#14532d]' :
+                      item.badge === 'SMART' ? 'bg-[#451a03] text-[#fbbf24] border border-[#b45309]' :
+                      'bg-[#082f49] text-[#38bdf8] border border-[#0369a1]'
                     }`}>
                       {item.badge}
                     </span>
@@ -197,9 +194,9 @@ export default function AppShell({
             })}
 
             {/* Tools & Utilities Section */}
-            <div className="pt-3">
-              <div className={`px-2 pb-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400 ${isCollapsed ? 'text-center' : ''}`}>
-                {isCollapsed ? '•••' : 'Utilities'}
+            <div className="pt-4">
+              <div className={`px-3 pb-2 text-[11px] font-bold uppercase tracking-wider text-slate-400 ${isCollapsed ? 'text-center' : ''}`}>
+                {isCollapsed ? '•••' : 'UTILITIES'}
               </div>
               {SECONDARY_ITEMS.map(item => {
                 const Icon = item.icon;
@@ -209,14 +206,14 @@ export default function AppShell({
                     key={item.href}
                     href={item.href}
                     title={isCollapsed ? item.label : undefined}
-                    className={`flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-xs transition-colors ${
+                    className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-xs transition-colors group ${
                       isActive
                         ? 'bg-slate-800 text-white font-semibold'
-                        : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60'
+                        : 'text-slate-300 hover:text-white hover:bg-slate-900/80 font-medium'
                     }`}
                   >
-                    <Icon className="h-3.5 w-3.5 shrink-0 text-slate-400" />
-                    {!isCollapsed && <span className="truncate">{item.label}</span>}
+                    <Icon className={`h-4.5 w-4.5 shrink-0 ${isActive ? 'text-white' : 'text-slate-400 group-hover:text-slate-200'}`} />
+                    {!isCollapsed && <span className="truncate flex-1">{item.label}</span>}
                   </Link>
                 );
               })}
@@ -225,10 +222,10 @@ export default function AppShell({
               <button
                 onClick={() => setIsResetModalOpen(true)}
                 title={isCollapsed ? 'Reset Data' : undefined}
-                className={`w-full flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-xs text-rose-400/90 hover:text-rose-200 hover:bg-rose-950/40 transition text-left mt-1`}
+                className="w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-xs text-rose-400 hover:text-rose-300 hover:bg-rose-950/30 transition text-left mt-1 font-medium group"
               >
-                <Trash2 className="h-3.5 w-3.5 shrink-0 text-rose-400" />
-                {!isCollapsed && <span className="truncate font-medium">Reset Data</span>}
+                <Trash2 className="h-4.5 w-4.5 shrink-0 text-rose-400 group-hover:text-rose-300" />
+                {!isCollapsed && <span className="truncate">Reset Data</span>}
               </button>
             </div>
           </div>
