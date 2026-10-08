@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import Navbar from '../../components/Navbar';
+import AppShell from '../../components/AppShell';
 import {
   runSimulation,
   getSimulationTemplates,
@@ -214,10 +214,8 @@ function SimulationStudioContent() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
-      <Navbar isBackendOnline={isBackendOnline} />
-
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-8 space-y-8">
+    <AppShell isBackendOnline={isBackendOnline} onRefresh={loadData} isLoading={isLoading}>
+      <div className="space-y-8">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800/80 pb-6">
           <div>
@@ -830,8 +828,8 @@ function SimulationStudioContent() {
             </div>
           </div>
         )}
-      </main>
-    </div>
+      </div>
+    </AppShell>
   );
 }
 
