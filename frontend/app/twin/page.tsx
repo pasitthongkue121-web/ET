@@ -148,7 +148,7 @@ export default function DigitalTwinPage() {
             </div>
             <div className="mt-2 flex items-baseline gap-1.5">
               <span className="text-2xl font-bold text-white tracking-tight">
-                {state ? state.total_power_kw.toFixed(2) : '--'}
+                {state ? Math.max(0, state.total_power_kw).toFixed(2) : '--'}
               </span>
               <span className="text-xs text-slate-400 font-medium">kW</span>
             </div>
