@@ -17,6 +17,8 @@ export default function PowerChart({
   onPeriodChange,
   isLoading = false,
 }: PowerChartProps) {
+  const [hoveredPoint, setHoveredPoint] = useState<EnergyReadingTimeseries | null>(null);
+
   const rawPoints = data || [];
   // Ensure chart always reflects real power curve so user sees real operation
   const points: EnergyReadingTimeseries[] = rawPoints.length > 0 ? rawPoints : (() => {
