@@ -432,3 +432,13 @@ export function RotateCcw({ size = 20, className = '', ...props }: IconProps) {
   );
 }
 
+export function TouMeterIcon({ size = 20, className = '', ...props }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} {...props}>
+      <path d="M5 7H3v10h2" />
+      <path d="M19 7h2v10h-2" />
+      <polygon points="13 6 9 13 13 13 11 18 15 11 11 11 13 6" />
+    </svg>
+  );
+}
+
