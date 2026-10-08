@@ -59,23 +59,38 @@ class DashboardService:
         today_start_str = ref_time.strftime("%Y-%m-%d 00:00:00")
         month_start_str = (ref_time - timedelta(days=30)).strftime("%Y-%m-%d %H:%M:%S")
 
-        # 1. Current Power (sum of latest readings across all devices)
-        total_current_power_w = sum(r["power"] for r in latest_readings)
-        current_power_kw = round(total_current_power_w / 1000.0, 2)
-        devices_online = sum(1 for r in latest_readings if r["power"] > 5.0)
+        # 1. Current House Power (sum of consumption circuits, excluding solar generation)
+        consumption_readings = [
+            r for r in latest_readings 
+            if r.get("category") != "solar" and not r.get("is_generation") and r.get("device_id") != "circuit_solar"
+        ]
+        if not consumption_readings:
+            consumption_readings = latest_readings
 
-        # 2. Today's Energy & Cost
+        total_current_power_w = sum(max(0.0, float(r.get("power", 0.0))) for r in consumption_readings)
+        current_power_kw = round(max(0.0, total_current_power_w / 1000.0), 2)
+        devices_online = sum(1 for r in consumption_readings if float(r.get("power", 0.0)) > 5.0)
+
+        # 2. Today's Energy & Cost (house consumption only)
         today_readings = self.repo.get_readings_timeseries(today_start_str, ref_time_str)
         today_energy_kwh = 0.0
         if today_readings:
-            today_energy_kwh = round(sum(r["energy"] for r in today_readings), 2)
+            today_consumption = [
+                r for r in today_readings
+                if r.get("category") != "solar" and not r.get("is_generation") and r.get("device_id") != "circuit_solar"
+            ] or today_readings
+            today_energy_kwh = round(max(0.0, sum(max(0.0, float(r.get("energy", 0.0))) for r in today_consumption)), 2)
         today_cost_thb = round(today_energy_kwh * ELECTRICITY_RATE_PER_KWH, 2)
 
-        # 3. 30-Day Monthly Energy & Forecast
+        # 3. 30-Day Monthly Energy & Forecast (house consumption only)
         monthly_readings = self.repo.get_readings_timeseries(month_start_str, ref_time_str)
         monthly_energy_kwh = 0.0
         if monthly_readings:
-            monthly_energy_kwh = round(sum(r["energy"] for r in monthly_readings), 2)
+            monthly_consumption = [
+                r for r in monthly_readings
+                if r.get("category") != "solar" and not r.get("is_generation") and r.get("device_id") != "circuit_solar"
+            ] or monthly_readings
+            monthly_energy_kwh = round(max(0.0, sum(max(0.0, float(r.get("energy", 0.0))) for r in monthly_consumption)), 2)
         monthly_cost_thb = round(monthly_energy_kwh * ELECTRICITY_RATE_PER_KWH, 2)
 
         # Daily average run-rate for projection (30 days)
