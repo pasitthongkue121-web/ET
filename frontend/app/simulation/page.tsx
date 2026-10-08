@@ -571,8 +571,8 @@ function SimulationStudioContent() {
                             {/* Hover Tooltip */}
                             <div className="absolute -top-12 hidden group-hover:flex flex-col items-center bg-slate-900 border border-slate-700 px-2 py-1 rounded text-[10px] text-white z-20 whitespace-nowrap shadow-lg">
                               <span>{item.hour_label}</span>
-                              <span className="text-slate-400">Base: {item.current_power_w}W</span>
-                              <span className="text-emerald-400">Sim: {item.simulated_power_w}W</span>
+                              <span className="text-slate-400">Base: {Math.max(0, item.current_power_w || 0)}W</span>
+                              <span className="text-emerald-400">Sim: {Math.max(0, item.simulated_power_w || 0)}W</span>
                             </div>
 
                           <div className="w-full flex items-end gap-0.5 h-full">
