@@ -30,7 +30,7 @@ _DEFAULT_DEVICES = [
     {"device_id": "circuit_lighting",  "name": "วงจรแสงสว่าง (Lighting)",  "room_id": "main_panel", "rated_power": 800.0, "status": 0, "category": "lighting"},
     {"device_id": "circuit_receptacle","name": "วงจรเต้ารับ (Receptacle)", "room_id": "main_panel", "rated_power": 2000.0,"status": 0, "category": "receptacle"},
     {"device_id": "circuit_heavy_load","name": "โหลดหนัก (Heavy Load)",    "room_id": "main_panel", "rated_power": 5000.0,"status": 0, "category": "heavy_load"},
-    {"device_id": "circuit_solar",     "name": "Solar PV (On-Grid)",       "room_id": "main_panel", "rated_power": -5000.0,"status": 0,"category": "solar"},
+    {"device_id": "circuit_solar",     "name": "Solar PV (On-Grid)",       "room_id": "main_panel", "rated_power": 5000.0, "status": 0, "category": "solar"},
 ]
 
 
