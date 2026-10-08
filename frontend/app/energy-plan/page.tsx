@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import Navbar from '../../components/Navbar';
+import AppShell from '../../components/AppShell';
 import { Zap, Activity, Cpu, RefreshCw, CheckCircle, AlertCircle, Layers } from '../../components/Icons';
 
 const API = '';  // Next.js proxy
@@ -229,10 +229,8 @@ export default function EnergyPlanPage() {
   const totalCurrentW = devices.reduce((acc, d) => acc + (d.current_power_w || 0), 0);
 
   return (
-    <div className="min-h-screen bg-[#070b19] text-slate-100">
-      <Navbar isBackendOnline={true} />
-
-      <main className="mx-auto max-w-6xl px-4 py-8 space-y-6">
+    <AppShell isBackendOnline={true} onRefresh={loadDevices} isLoading={loading}>
+      <div className="space-y-6">
 
         {/* ─── Header ────────────────────────────────────────────────── */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -642,7 +640,7 @@ export default function EnergyPlanPage() {
             </div>
           </div>
         )}
-      </main>
-    </div>
+      </div>
+    </AppShell>
   );
 }
