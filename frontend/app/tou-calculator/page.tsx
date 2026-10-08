@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import Navbar from '../../components/Navbar';
+import AppShell from '../../components/AppShell';
 import {
   Zap,
   Activity,
@@ -344,10 +344,8 @@ export default function TOUCalculatorPage() {
   }, [loadData, executeSimulation]);
 
   return (
-    <div className="min-h-screen bg-[#070b19] text-slate-100 pb-16">
-      <Navbar isBackendOnline={true} />
-
-      <main className="mx-auto max-w-7xl px-4 py-6 space-y-6">
+    <AppShell isBackendOnline={true} onRefresh={() => { loadData(); executeSimulation(); }}>
+      <div className="space-y-6">
 
         {/* ─── Header & Realtime TOU Banner ──────────────────────────── */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800/80 pb-5">
@@ -1156,7 +1154,7 @@ export default function TOUCalculatorPage() {
             </div>
           </div>
         )}
-      </main>
-    </div>
+      </div>
+    </AppShell>
   );
 }
