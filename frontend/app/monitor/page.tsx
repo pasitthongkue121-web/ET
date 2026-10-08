@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import Navbar from '../../components/Navbar';
+import AppShell from '../../components/AppShell';
 import PowerChart from '../../components/PowerChart';
 import { getEnergyHistory, getDevices, checkBackendHealth } from '../../lib/api';
 import { EnergyHistoryResponse, Device } from '../../lib/types';
@@ -43,10 +43,8 @@ export default function EnergyMonitorPage() {
   const latestPoint = timeseries.length > 0 ? timeseries[timeseries.length - 1] : null;
 
   return (
-    <div className="min-h-screen bg-[#070b19] text-slate-100 selection:bg-blue-600 selection:text-white">
-      <Navbar isBackendOnline={isBackendOnline} />
-
-      <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8 space-y-6">
+    <AppShell isBackendOnline={isBackendOnline} onRefresh={loadData} isLoading={isLoading}>
+      <div className="space-y-6">
         {/* Page Title & Filter Bar */}
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
@@ -214,7 +212,7 @@ export default function EnergyMonitorPage() {
             </table>
           </div>
         </div>
-      </main>
-    </div>
+      </div>
+    </AppShell>
   );
 }
