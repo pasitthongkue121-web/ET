@@ -19,7 +19,12 @@ export default function PowerChart({
 }: PowerChartProps) {
   const [hoveredPoint, setHoveredPoint] = useState<EnergyReadingTimeseries | null>(null);
 
-  const rawPoints = data || [];
+  const rawPoints = (data || []).map(p => ({
+    ...p,
+    power_w: Math.max(0, p.power_w || 0),
+    energy_kwh: Math.max(0, p.energy_kwh || 0),
+  }));
+
   // Ensure chart always reflects real power curve so user sees real operation
   const points: EnergyReadingTimeseries[] = rawPoints.length > 0 ? rawPoints : (() => {
     const fallback: EnergyReadingTimeseries[] = [];
@@ -36,20 +41,21 @@ export default function PowerChart({
         energy_kwh: (w * 2) / 1000,
         voltage_v: 230,
         current_a: +(w / 230).toFixed(1),
-        device_count: 4,
+        device_count: 3,
       });
     }
     return fallback;
   })();
 
-  const maxPower = points.length > 0 ? Math.max(...points.map((p) => p.power_w), 100) : 100;
+  const rawMax = points.length > 0 ? Math.max(...points.map((p) => p.power_w), 0) : 0;
+  const maxPower = Math.max(rawMax * 1.15, 600); // guaranteed minimum 600W headroom
   const avgPower = points.length > 0 ? Math.round(points.reduce((acc, p) => acc + p.power_w, 0) / points.length) : 0;
   const latestPower = points.length > 0 ? points[points.length - 1].power_w : 0;
 
   // Generate SVG coordinates (compact height)
   const width = 800;
   const height = 180;
-  const padding = { top: 15, right: 15, bottom: 25, left: 45 };
+  const padding = { top: 15, right: 15, bottom: 25, left: 55 };
   const chartW = width - padding.left - padding.right;
   const chartH = height - padding.top - padding.bottom;
 
@@ -59,8 +65,9 @@ export default function PowerChart({
   };
 
   const getY = (val: number) => {
-    const yMax = maxPower * 1.15; // 15% headroom
-    return padding.top + chartH - (val / yMax) * chartH;
+    // Strictly clamp within [0, maxPower] so curve NEVER draws out of SVG scope
+    const clampedVal = Math.max(0, Math.min(val, maxPower));
+    return padding.top + chartH - (clampedVal / maxPower) * chartH;
   };
 
   // Build SVG Path
@@ -87,7 +94,7 @@ export default function PowerChart({
     areaD += ` L ${getX(points.length - 1)} ${padding.top + chartH} Z`;
   }
 
-  // Y-axis grid marks
+  // Y-axis grid marks (clean 0, half, max)
   const yTicks = [
     0,
     Math.round((maxPower * 0.5) / 100) * 100,
