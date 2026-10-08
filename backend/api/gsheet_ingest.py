@@ -219,13 +219,24 @@ def sim_status():
 
 
 @router.post("/simulation/esp32/start")
-def sim_start(req: SimStartRequest):
-    if req.power_watts is not None:
-        esp32_simulator.set_override(req.power_watts)
+def sim_start(
+    req: Optional[SimStartRequest] = None,
+    device_id: Optional[str] = None,
+    target: Optional[str] = None,
+    interval: Optional[int] = None,
+    power_watts: Optional[float] = None
+):
+    dev_id = (req.device_id if req else None) or device_id or "living_room_ac"
+    tgt = (req.target if req else None) or target or "both"
+    inv = (req.interval if req else None) or interval or 15
+    pw = (req.power_watts if req else None) or power_watts
+
+    if pw is not None:
+        esp32_simulator.set_override(pw)
     return esp32_simulator.start(
-        device_id=req.device_id,
-        target=req.target,
-        interval=req.interval
+        device_id=dev_id,
+        target=tgt,
+        interval=inv
     )
 
 
