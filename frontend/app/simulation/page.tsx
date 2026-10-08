@@ -497,18 +497,22 @@ function SimulationStudioContent() {
 
                   {/* SVG Load Chart */}
                   <div className="h-40 w-full bg-slate-950 p-3 rounded-xl border border-slate-800 flex items-end gap-1.5">
-                    {activeResult.hourly_load_comparison.map((item) => {
-                      const maxW = 2000;
-                      const baseH = Math.min(100, Math.max(10, (item.current_power_w / maxW) * 100));
-                      const simH = Math.min(100, Math.max(10, (item.simulated_power_w / maxW) * 100));
-                      return (
-                        <div key={item.hour} className="flex-1 flex flex-col items-center gap-1 h-full justify-end group relative">
-                          {/* Hover Tooltip */}
-                          <div className="absolute -top-12 hidden group-hover:flex flex-col items-center bg-slate-900 border border-slate-700 px-2 py-1 rounded text-[10px] text-white z-20 whitespace-nowrap shadow-lg">
-                            <span>{item.hour_label}</span>
-                            <span className="text-slate-400">Base: {item.current_power_w}W</span>
-                            <span className="text-emerald-400">Sim: {item.simulated_power_w}W</span>
-                          </div>
+                    {(() => {
+                      const maxPower = Math.max(
+                        1000,
+                        ...activeResult.hourly_load_comparison.map(i => Math.max(i.current_power_w || 0, i.simulated_power_w || 0))
+                      );
+                      return activeResult.hourly_load_comparison.map((item) => {
+                        const baseH = Math.min(100, Math.max(6, ((item.current_power_w || 0) / maxPower) * 100));
+                        const simH = Math.min(100, Math.max(6, ((item.simulated_power_w || 0) / maxPower) * 100));
+                        return (
+                          <div key={item.hour} className="flex-1 flex flex-col items-center gap-1 h-full justify-end group relative">
+                            {/* Hover Tooltip */}
+                            <div className="absolute -top-12 hidden group-hover:flex flex-col items-center bg-slate-900 border border-slate-700 px-2 py-1 rounded text-[10px] text-white z-20 whitespace-nowrap shadow-lg">
+                              <span>{item.hour_label}</span>
+                              <span className="text-slate-400">Base: {item.current_power_w}W</span>
+                              <span className="text-emerald-400">Sim: {item.simulated_power_w}W</span>
+                            </div>
 
                           <div className="w-full flex items-end gap-0.5 h-full">
                             <div
