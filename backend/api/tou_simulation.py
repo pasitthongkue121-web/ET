@@ -107,8 +107,18 @@ def get_tou_status():
     hour = now.hour
     is_on_peak = not is_weekend and (9 <= hour < 22)
     
-    current_rate = RATE_ON_PEAK if is_on_peak else RATE_OFF_PEAK
-    flat_rate = 4.42
+    from backend.services.thai_tariff import (
+        TOU_ON_PEAK_BASE,
+        TOU_OFF_PEAK_BASE,
+        TOU_ON_PEAK_WITH_FT,
+        TOU_OFF_PEAK_WITH_FT,
+        FT_RATE_THB,
+        SERVICE_CHARGE_THB,
+        VAT_RATE_PCT
+    )
+
+    current_rate = TOU_ON_PEAK_WITH_FT if is_on_peak else TOU_OFF_PEAK_WITH_FT
+    flat_rate = 4.4217 + FT_RATE_THB  # effective ~4.82 THB/kWh with Ft
     
     if is_on_peak:
         hours_to_next = 22 - hour
@@ -124,7 +134,11 @@ def get_tou_status():
     return {
         "is_on_peak": is_on_peak,
         "current_rate_thb": current_rate,
-        "flat_rate_thb": flat_rate,
+        "base_rate_thb": TOU_ON_PEAK_BASE if is_on_peak else TOU_OFF_PEAK_BASE,
+        "ft_rate_thb": FT_RATE_THB,
+        "flat_rate_thb": round(flat_rate, 2),
+        "service_charge_thb": SERVICE_CHARGE_THB,
+        "vat_pct": VAT_RATE_PCT,
         "period_name": period_name,
         "period_color": period_color,
         "hours_to_next": max(1, hours_to_next),
@@ -348,25 +362,44 @@ def run_tou_simulation(req: TOUSimulateRequest):
             "grid_export_kw": round(grid_export, 2),
         })
 
-    # Financial calculations
-    export_rate = 2.20 # Feed-in tariff THB/kWh
-    flat_rate = 4.42
-    on_peak_cost = on_peak_import * RATE_ON_PEAK
-    off_peak_cost = off_peak_import * RATE_OFF_PEAK
-    export_income = total_grid_export * export_rate
-    daily_tou_cost = max(0.0, on_peak_cost + off_peak_cost - export_income)
-    daily_flat_baseline = total_consumption * flat_rate
-    daily_savings = max(0.0, daily_flat_baseline - daily_tou_cost)
-    savings_pct = (daily_savings / daily_flat_baseline * 100.0) if daily_flat_baseline > 0 else 0.0
+    # Authentic MEA / PEA Electricity Tariff Calculations
+    from backend.services.thai_tariff import (
+        calculate_normal_progressive_bill,
+        calculate_tou_bill,
+        TOU_ON_PEAK_BASE,
+        TOU_OFF_PEAK_BASE,
+        FT_RATE_THB,
+        SERVICE_CHARGE_THB,
+        VAT_RATE_PCT,
+        FIT_EXPORT_RATE_THB
+    )
 
-    monthly_flat = daily_flat_baseline * 30.0
-    monthly_tou = daily_tou_cost * 30.0
-    monthly_savings = daily_savings * 30.0
+    # 30-Day Household Projection
+    monthly_consumption_kwh = total_consumption * 30.0
+    normal_bill = calculate_normal_progressive_bill(monthly_consumption_kwh)
+
+    monthly_on_peak_kwh = on_peak_import * 30.0
+    monthly_off_peak_kwh = off_peak_import * 30.0
+    monthly_export_kwh = total_grid_export * 30.0
+    tou_bill = calculate_tou_bill(monthly_on_peak_kwh, monthly_off_peak_kwh, monthly_export_kwh)
+
+    monthly_flat = normal_bill["total_bill_thb"]
+    monthly_tou = tou_bill["total_bill_thb"]
+    monthly_savings = max(0.0, monthly_flat - monthly_tou)
+    savings_pct = (monthly_savings / monthly_flat * 100.0) if monthly_flat > 0 else 0.0
     yearly_savings = monthly_savings * 12.0
 
-    # System investment estimation (solar ~25k/kW, battery ~14k/kWh)
+    daily_flat_baseline = round(monthly_flat / 30.0, 2)
+    daily_tou_cost = round(monthly_tou / 30.0, 2)
+    daily_savings = round(monthly_savings / 30.0, 2)
+
+    on_peak_cost = round(on_peak_import * (TOU_ON_PEAK_BASE + FT_RATE_THB), 2)
+    off_peak_cost = round(off_peak_import * (TOU_OFF_PEAK_BASE + FT_RATE_THB), 2)
+    export_income = round(total_grid_export * FIT_EXPORT_RATE_THB, 2)
+
+    # System investment estimation (solar ~25k/kW, battery ~14k/kWh, EV Wallbox ~25k)
     invest = (solar_cap * 25000.0) + (bat_cap * 14000.0) + (25000.0 if req.ev_enabled else 0.0)
-    payback_years = (invest / max(1.0, yearly_savings)) if yearly_savings > 0 else 0.0
+    payback_years = round((invest / max(1.0, yearly_savings)), 1) if yearly_savings > 0 else 0.0
 
     return {
         "scenario": {
@@ -398,20 +431,39 @@ def run_tou_simulation(req: TOUSimulateRequest):
             "ev_pct": round((ev_total / max(0.1, total_consumption)) * 100.0, 1),
         },
         "costs": {
-            "on_peak_cost_thb": round(on_peak_cost, 2),
-            "off_peak_cost_thb": round(off_peak_cost, 2),
-            "export_income_thb": round(export_income, 2),
-            "daily_tou_cost_thb": round(daily_tou_cost, 2),
-            "daily_flat_baseline_thb": round(daily_flat_baseline, 2),
+            "on_peak_cost_thb": on_peak_cost,
+            "off_peak_cost_thb": off_peak_cost,
+            "export_income_thb": export_income,
+            "daily_tou_cost_thb": daily_tou_cost,
+            "daily_flat_baseline_thb": daily_flat_baseline,
             "raw_tou_without_solar_thb": round(daily_flat_baseline * 0.95, 2),
-            "daily_savings_thb": round(daily_savings, 2),
+            "daily_savings_thb": daily_savings,
             "daily_savings_pct": round(savings_pct, 1),
             "monthly_flat_cost_thb": round(monthly_flat, 2),
             "monthly_tou_cost_thb": round(monthly_tou, 2),
             "monthly_savings_thb": round(monthly_savings, 2),
             "yearly_savings_thb": round(yearly_savings, 2),
             "estimated_investment_thb": round(invest, 2),
-            "payback_period_years": round(payback_years, 1),
+            "payback_period_years": payback_years,
         },
+        "official_tariffs": {
+            "ft_rate_thb": FT_RATE_THB,
+            "service_charge_thb": SERVICE_CHARGE_THB,
+            "vat_pct": VAT_RATE_PCT,
+            "fit_export_rate_thb": FIT_EXPORT_RATE_THB,
+            "normal_steps": [
+                {"label": "1 - 150 หน่วยแรก", "rate": 3.2484},
+                {"label": "151 - 400 หน่วยถัดไป", "rate": 4.2233},
+                {"label": "401 หน่วยขึ้นไป", "rate": 4.4217},
+            ],
+            "tou_rates": {
+                "on_peak_base": TOU_ON_PEAK_BASE,
+                "off_peak_base": TOU_OFF_PEAK_BASE,
+                "on_peak_with_ft": round(TOU_ON_PEAK_BASE + FT_RATE_THB, 4),
+                "off_peak_with_ft": round(TOU_OFF_PEAK_BASE + FT_RATE_THB, 4),
+            }
+        },
+        "normal_bill_breakdown": normal_bill,
+        "tou_bill_breakdown": tou_bill,
         "hourly_chart": records
     }
