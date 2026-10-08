@@ -35,7 +35,7 @@ _CIRCUITS = [
         "circuit_id": "circuit_solar",
         "name": "Solar PV (On-Grid)",
         "category": "solar",
-        "rated_power": -5000.0,
+        "rated_power": 5000.0,
         "noise": 0.0,  # custom logic for solar
     }
 ]
@@ -92,16 +92,16 @@ class CircuitEnergySimulator:
             return max(0.0, base)
 
         elif circuit_id == "circuit_solar":
-            base = 0
+            base = 0.0
             if 6 <= hour < 10:
-                base = -3500 * ((hour - 6) / 4)
+                base = 3500.0 * ((hour - 6) / 4.0)
             elif 10 <= hour < 15:
-                base = -3500
+                base = 3500.0
             elif 15 <= hour < 18:
-                base = -3500 * (1 - (hour - 15) / 3)
+                base = 3500.0 * (1.0 - (hour - 15) / 3.0)
             
             cloud_factor = random.uniform(0.7, 1.0)
-            return base * cloud_factor
+            return max(0.0, base * cloud_factor)
 
         return 0.0
 
@@ -114,16 +114,13 @@ class CircuitEnergySimulator:
         readings = []
         for circuit in _CIRCUITS:
             cid = circuit["circuit_id"]
-            power_w = self._get_circuit_power(cid, hour, minute)
+            power_w = abs(self._get_circuit_power(cid, hour, minute))
             
             voltage = round(220.0 + random.uniform(-2.0, 2.0), 1)
-            current = round(abs(power_w) / voltage, 2)
+            current = round(power_w / max(1.0, voltage), 2)
             
-            kwh_delta = (abs(power_w) * (self.interval_seconds / 3600.0)) / 1000.0
-            if power_w < 0:
-                self._energy_accumulators[cid] -= kwh_delta
-            else:
-                self._energy_accumulators[cid] += kwh_delta
+            kwh_delta = (power_w * (self.interval_seconds / 3600.0)) / 1000.0
+            self._energy_accumulators[cid] += kwh_delta
                 
             reading = {
                 "device_id": cid,
