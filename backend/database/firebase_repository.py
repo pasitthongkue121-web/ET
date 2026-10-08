@@ -157,6 +157,12 @@ class FirebaseRepository:
         doc = db.collection("devices").document(device_id).get()
         return doc.to_dict() if doc.exists else None
 
+    def create_device(self, device_data: Dict[str, Any]) -> Dict[str, Any]:
+        db = self._client()
+        doc_ref = db.collection("devices").document(device_data["device_id"])
+        doc_ref.set(device_data)
+        return device_data
+
     def update_device_status(self, device_id: str, status: bool, temperature: Optional[float] = None) -> None:
         db = self._client()
         update = {"status": 1 if status else 0}
