@@ -13,9 +13,17 @@ TOU Rate Structure (MEA residential TOU):
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta
 
-# Rate constants (THB per kWh, MEA residential TOU)
-RATE_ON_PEAK   = 5.6836
-RATE_OFF_PEAK  = 2.6369
+from backend.services.thai_tariff import (
+    TOU_ON_PEAK_WITH_FT as RATE_ON_PEAK,
+    TOU_OFF_PEAK_WITH_FT as RATE_OFF_PEAK,
+    TOU_ON_PEAK_BASE,
+    TOU_OFF_PEAK_BASE,
+    FT_RATE_THB,
+    SERVICE_CHARGE_THB,
+    VAT_RATE_PCT,
+    calculate_normal_progressive_bill,
+    calculate_tou_bill
+)
 
 # Load groups per FREC/MEA classification
 LIGHTING_CATEGORY   = "lighting"
