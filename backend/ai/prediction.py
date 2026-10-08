@@ -42,10 +42,17 @@ class AIEnergyPredictionEngine:
         
         if not rows:
             return pd.DataFrame()
+
+        rows = [r for r in rows if r.get("device_id") != "circuit_solar" and r.get("category") != "solar"]
+        if not rows:
+            return pd.DataFrame()
             
         df = pd.DataFrame(rows)
         if "timestamp" not in df.columns or df.empty:
             return pd.DataFrame()
+
+        df["power"] = df["power"].astype(float).abs()
+        df["energy"] = df["energy"].astype(float).abs()
             
         df["dt"] = pd.to_datetime(df["timestamp"], format='mixed')
         df["hour"] = df["dt"].dt.hour
