@@ -126,23 +126,24 @@ def on_startup():
         from backend.database.connection import init_db, get_connection
         init_db()
 
-        # If simulator is disabled, clear all old energy data for a clean slate
-        enable_sim = os.getenv("ENABLE_ESP32_SIM", "false").lower() == "true"
-        if not enable_sim:
-            try:
-                conn = get_connection()
-                conn.execute("DELETE FROM energy_readings")
-                conn.commit()
-                conn.close()
-                logger.info("[STARTUP] ✅ energy_readings cleared — fresh start (simulator disabled)")
-            except Exception as e:
-                logger.warning(f"[STARTUP] Could not clear energy_readings: {e}")
-        else:
-            logger.info("✅ SQLite ready (simulator enabled — keeping existing data)")
+        logger.info("✅ SQLite ready")
+        # Ensure initial 24h baseline data exists so dashboard and charts show live real data
+        try:
+            conn = get_connection()
+            c = conn.cursor()
+            c.execute("SELECT COUNT(*) FROM energy_readings")
+            count = c.fetchone()[0]
+            conn.close()
+            if count == 0:
+                logger.info("[STARTUP] Database empty — seeding initial 24h realistic energy data...")
+                from backend.services.esp32_simulator_service import esp32_simulator
+                esp32_simulator.seed_historical_data(hours=24)
+                logger.info("[STARTUP] ✅ Initial 24h energy readings seeded.")
+        except Exception as e:
+            logger.warning(f"[STARTUP] Could not seed historical readings: {e}")
 
-
-    # Auto-start ESP32 multi-device simulator if requested
-    enable_sim = os.getenv("ENABLE_ESP32_SIM", "false").lower() == "true"
+    # Auto-start ESP32 multi-device simulator
+    enable_sim = os.getenv("ENABLE_ESP32_SIM", "true").lower() == "true"
     if enable_sim:
         from backend.services.esp32_simulator_service import esp32_simulator
         result = esp32_simulator.start()
