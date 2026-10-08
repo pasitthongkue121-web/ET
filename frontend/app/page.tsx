@@ -181,11 +181,11 @@ export default function DashboardPage() {
     }
   };
 
-  // Pre-calculate clean metrics
-  const currentKw = summary?.current_power_kw ?? 0.0;
-  const currentWatts = (currentKw * 1000).toFixed(0);
-  const todayKwh = summary?.today_energy_kwh ?? 0.0;
-  const todayCost = summary?.today_cost_thb ?? 0.0;
+  // Pre-calculate clean metrics (guaranteed non-negative)
+  const currentKw = Math.max(0, summary?.current_power_kw ?? 0.0);
+  const currentWatts = Math.round(currentKw * 1000).toLocaleString();
+  const todayKwh = Math.max(0, summary?.today_energy_kwh ?? 0.0);
+  const todayCost = Math.max(0, summary?.today_cost_thb ?? 0.0);
   const onlineCount = summary?.devices_online ?? devices.filter(d => d.status).length;
   const totalCount = summary?.devices_total ?? devices.length;
 
