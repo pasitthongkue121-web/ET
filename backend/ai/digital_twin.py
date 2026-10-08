@@ -124,13 +124,23 @@ class DigitalTwinEngine:
             }
 
         for dev in devices:
-            r_id = dev.get("room_id")
-            if not r_id or r_id not in rooms_dict:
-                continue
+            r_id = dev.get("room_id") or "main_panel"
+            if r_id not in rooms_dict:
+                room_title = r_id.replace("_", " ").title()
+                rooms_dict[r_id] = {
+                    "room_id": r_id,
+                    "name": room_title,
+                    "floor": 1,
+                    "icon": "home",
+                    "devices": [],
+                    "active_devices": 0,
+                    "total_devices": 0,
+                    "current_power_w": 0.0
+                }
 
             dev_id = dev["device_id"]
             latest_r = latest_map.get(dev_id, {})
-            p_w = float(latest_r.get("power", 0.0))
+            p_w = float(latest_r.get("power", 0.0)) if latest_r else (float(dev.get("rated_power", 500.0)) * 0.4 if dev.get("status", 0) else 0.0)
             is_active = p_w > 15.0 or bool(dev.get("status", 0))
 
             sched = "24/7 Continuous" if "fridge" in dev_id.lower() else "Intermittent / Routine"
@@ -143,14 +153,14 @@ class DigitalTwinEngine:
                 device_type=dev.get("category", "general"),
                 rated_power=float(dev.get("rated_power", 0.0)),
                 status=is_active,
-                current_power_w=round(p_w, 1),
+                current_power_w=round(max(0.0, p_w), 1),
                 temperature_setting=None,
                 schedule=sched
             )
 
             rooms_dict[r_id]["devices"].append(twin_dev)
             rooms_dict[r_id]["total_devices"] += 1
-            rooms_dict[r_id]["current_power_w"] += p_w
+            rooms_dict[r_id]["current_power_w"] += max(0.0, p_w)
             if is_active:
                 rooms_dict[r_id]["active_devices"] += 1
 
