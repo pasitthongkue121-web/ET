@@ -111,7 +111,7 @@ export default function TOUCalculatorPage() {
 
         for (let h = 0; h < 24; h++) {
           const isOnPeak = h >= 9 && h < 22;
-          const rate = isOnPeak ? 5.80 : 2.64;
+          const rate = isOnPeak ? 5.51 : 3.00;
 
           const l = h >= 18 && h <= 23 ? 0.45 : (h >= 6 && h <= 8 ? 0.15 : 0.05);
           const r = h >= 8 && h <= 22 ? 0.85 : 0.25;
@@ -193,17 +193,46 @@ export default function TOUCalculatorPage() {
           });
         }
 
-        const flatRate = 4.42;
-        const onPeakCost = onPeakImp * 5.80;
-        const offPeakCost = offPeakImp * 2.64;
-        const expIncome = totGridExp * 2.20;
-        const dailyTouCost = Math.max(0, onPeakCost + offPeakCost - expIncome);
-        const dailyFlatBase = totCons * flatRate;
-        const dailySav = Math.max(0, dailyFlatBase - dailyTouCost);
-        const savPct = (dailySav / dailyFlatBase) * 100;
+        // --- Authentic 30-day MEA/PEA Bill Calculation ---
+        const monthlyConsKwh = totCons * 30.0;
+        const s1Kwh = Math.min(monthlyConsKwh, 150.0);
+        const s1Cost = s1Kwh * 3.2484;
+        const s2Kwh = Math.max(0, Math.min(monthlyConsKwh - 150.0, 250.0));
+        const s2Cost = s2Kwh * 4.2233;
+        const s3Kwh = Math.max(0, monthlyConsKwh - 400.0);
+        const s3Cost = s3Kwh * 4.4217;
+        const normalBaseEnergy = s1Cost + s2Cost + s3Cost;
+        const normalFtCost = monthlyConsKwh * 0.3972;
+        const serviceCharge = 38.22;
+        const normalSubtotal = normalBaseEnergy + normalFtCost + serviceCharge;
+        const normalVat = normalSubtotal * 0.07;
+        const monthlyFlatCost = normalSubtotal + normalVat;
+
+        // TOU 30-day calculation
+        const monthlyOnKwh = onPeakImp * 30.0;
+        const monthlyOffKwh = offPeakImp * 30.0;
+        const monthlyExpKwh = totGridExp * 30.0;
+        const touOnBaseCost = monthlyOnKwh * 5.1135;
+        const touOffBaseCost = monthlyOffKwh * 2.6007;
+        const touBaseEnergy = touOnBaseCost + touOffBaseCost;
+        const touFtCost = (monthlyOnKwh + monthlyOffKwh) * 0.3972;
+        const touSubtotal = touBaseEnergy + touFtCost + serviceCharge;
+        const touVat = touSubtotal * 0.07;
+        const touImportBill = touSubtotal + touVat;
+        const touExportIncome = monthlyExpKwh * 2.20;
+        const monthlyTouCost = Math.max(0, touImportBill - touExportIncome);
+
+        const onPeakDailyCost = onPeakImp * 5.5107;
+        const offPeakDailyCost = offPeakImp * 2.9979;
+        const dailyExportIncome = totGridExp * 2.20;
+        const dailyTouCost = monthlyTouCost / 30.0;
+        const dailyFlatBase = monthlyFlatCost / 30.0;
+        const monthlySav = Math.max(0, monthlyFlatCost - monthlyTouCost);
+        const dailySav = monthlySav / 30.0;
+        const savPct = monthlyFlatCost > 0 ? (monthlySav / monthlyFlatCost) * 100 : 0;
 
         const invest = (solarCap * 25000) + (batCap * 14000) + (evEnabled ? 25000 : 0);
-        const yearlySav = dailySav * 30 * 12;
+        const yearlySav = monthlySav * 12;
 
         res = {
           scenario: {
@@ -235,20 +264,65 @@ export default function TOUCalculatorPage() {
             ev_pct: Number(((evKwhTot / (totCons || 1)) * 100).toFixed(1)),
           },
           costs: {
-            on_peak_cost_thb: Number(onPeakCost.toFixed(2)),
-            off_peak_cost_thb: Number(offPeakCost.toFixed(2)),
-            export_income_thb: Number(expIncome.toFixed(2)),
+            on_peak_cost_thb: Number(onPeakDailyCost.toFixed(2)),
+            off_peak_cost_thb: Number(offPeakDailyCost.toFixed(2)),
+            export_income_thb: Number(dailyExportIncome.toFixed(2)),
             daily_tou_cost_thb: Number(dailyTouCost.toFixed(2)),
             daily_flat_baseline_thb: Number(dailyFlatBase.toFixed(2)),
             raw_tou_without_solar_thb: Number((dailyFlatBase * 0.95).toFixed(2)),
             daily_savings_thb: Number(dailySav.toFixed(2)),
             daily_savings_pct: Number(savPct.toFixed(1)),
-            monthly_flat_cost_thb: Number((dailyFlatBase * 30).toFixed(2)),
-            monthly_tou_cost_thb: Number((dailyTouCost * 30).toFixed(2)),
-            monthly_savings_thb: Number((dailySav * 30).toFixed(2)),
+            monthly_flat_cost_thb: Number(monthlyFlatCost.toFixed(2)),
+            monthly_tou_cost_thb: Number(monthlyTouCost.toFixed(2)),
+            monthly_savings_thb: Number(monthlySav.toFixed(2)),
             yearly_savings_thb: Number(yearlySav.toFixed(2)),
             estimated_investment_thb: Number(invest.toFixed(2)),
             payback_period_years: Number(((invest / (yearlySav || 1))).toFixed(1)),
+          },
+          normal_bill_breakdown: {
+            meter_type: 'normal_progressive',
+            category: 'บ้านอยู่อาศัย อัตรา 1.2 (เกิน 150 หน่วย/เดือน)',
+            total_kwh: Number(monthlyConsKwh.toFixed(2)),
+            steps_breakdown: [
+              { label: '1 - 150 หน่วยแรก', kwh: Number(s1Kwh.toFixed(2)), rate: 3.2484, cost: Number(s1Cost.toFixed(2)) },
+              { label: '151 - 400 หน่วยถัดไป', kwh: Number(s2Kwh.toFixed(2)), rate: 4.2233, cost: Number(s2Cost.toFixed(2)) },
+              { label: '401 หน่วยขึ้นไป', kwh: Number(s3Kwh.toFixed(2)), rate: 4.4217, cost: Number(s3Cost.toFixed(2)) },
+            ],
+            base_energy_cost_thb: Number(normalBaseEnergy.toFixed(2)),
+            service_charge_thb: serviceCharge,
+            ft_rate_thb: 0.3972,
+            ft_cost_thb: Number(normalFtCost.toFixed(2)),
+            subtotal_thb: Number(normalSubtotal.toFixed(2)),
+            vat_pct: 7.0,
+            vat_cost_thb: Number(normalVat.toFixed(2)),
+            total_bill_thb: Number(monthlyFlatCost.toFixed(2)),
+            effective_rate_thb_kwh: Number((monthlyFlatCost / (monthlyConsKwh || 1)).toFixed(2)),
+          },
+          tou_bill_breakdown: {
+            meter_type: 'tou_time_of_use',
+            category: 'บ้านอยู่อาศัย อัตรา 1.3 (TOU แรงดันต่ำกว่า 22 kV)',
+            on_peak_kwh: Number(monthlyOnKwh.toFixed(2)),
+            off_peak_kwh: Number(monthlyOffKwh.toFixed(2)),
+            total_import_kwh: Number((monthlyOnKwh + monthlyOffKwh).toFixed(2)),
+            on_peak_base_rate: 5.1135,
+            off_peak_base_rate: 2.6007,
+            on_peak_with_ft: 5.5107,
+            off_peak_with_ft: 2.9979,
+            on_peak_cost_thb: Number(touOnBaseCost.toFixed(2)),
+            off_peak_cost_thb: Number(touOffBaseCost.toFixed(2)),
+            base_energy_cost_thb: Number(touBaseEnergy.toFixed(2)),
+            service_charge_thb: serviceCharge,
+            ft_rate_thb: 0.3972,
+            ft_cost_thb: Number(touFtCost.toFixed(2)),
+            subtotal_thb: Number(touSubtotal.toFixed(2)),
+            vat_pct: 7.0,
+            vat_cost_thb: Number(touVat.toFixed(2)),
+            total_import_bill_thb: Number(touImportBill.toFixed(2)),
+            export_kwh: Number(monthlyExpKwh.toFixed(2)),
+            export_rate_thb: 2.20,
+            export_income_thb: Number(touExportIncome.toFixed(2)),
+            total_bill_thb: Number(monthlyTouCost.toFixed(2)),
+            effective_rate_thb_kwh: Number((monthlyTouCost / (monthlyOnKwh + monthlyOffKwh || 1)).toFixed(2)),
           },
           hourly_chart: records,
         };
@@ -338,8 +412,8 @@ export default function TOUCalculatorPage() {
               🔴
             </span>
             <div>
-              <div className="text-xs font-bold text-rose-300">ช่วง On-Peak: 5.80 บาท/หน่วย</div>
-              <div className="text-[11px] text-slate-400 mt-0.5">วันจันทร์ - ศุกร์ (09:00 - 22:00 น.) ความต้องการใช้ไฟสูง</div>
+              <div className="text-xs font-bold text-rose-300">ช่วง On-Peak: 5.51 บาท/หน่วย (ฐาน 5.11 + Ft 0.40)</div>
+              <div className="text-[11px] text-slate-400 mt-0.5">จันทร์ - ศุกร์ (09:00 - 22:00 น.) อัตรา TOU กฟน./กฟภ. 1.3</div>
             </div>
           </div>
 
@@ -348,8 +422,8 @@ export default function TOUCalculatorPage() {
               🟢
             </span>
             <div>
-              <div className="text-xs font-bold text-emerald-300">ช่วง Off-Peak: 2.64 บาท/หน่วย</div>
-              <div className="text-[11px] text-slate-400 mt-0.5">วันจันทร์ - ศุกร์ (22:00 - 09:00 น.) และ เสาร์-อาทิตย์ ตลอด 24 ชม.</div>
+              <div className="text-xs font-bold text-emerald-300">ช่วง Off-Peak: 3.00 บาท/หน่วย (ฐาน 2.60 + Ft 0.40)</div>
+              <div className="text-[11px] text-slate-400 mt-0.5">จ.-ศ. (22:00 - 09:00 น.) และ เสาร์-อาทิตย์ ตลอด 24 ชม.</div>
             </div>
           </div>
 
@@ -358,8 +432,8 @@ export default function TOUCalculatorPage() {
               ⚡
             </span>
             <div>
-              <div className="text-xs font-bold text-blue-300">มิเตอร์ปกติ (Flat Rate): 4.42 บาท</div>
-              <div className="text-[11px] text-slate-400 mt-0.5">อัตราก้าวหน้าเฉลี่ยทั่วไป ไม่แยกช่วงเวลา</div>
+              <div className="text-xs font-bold text-blue-300">มิเตอร์ปกติ: อัตราก้าวหน้า 1.2 (3 ขั้นบันได)</div>
+              <div className="text-[11px] text-slate-400 mt-0.5">1-150 @ 3.25฿, 151-400 @ 4.22฿, 401+ @ 4.42฿ + Ft + บริการ 38.22฿ + VAT 7%</div>
             </div>
           </div>
         </div>
@@ -741,7 +815,7 @@ export default function TOUCalculatorPage() {
                       {/* Tooltip on hover */}
                       <div className="absolute bottom-full mb-2 hidden group-hover:flex flex-col bg-slate-900 text-white text-[10px] p-2 rounded-lg shadow-xl border border-slate-700 z-30 whitespace-nowrap">
                         <div className="font-bold border-b border-slate-800 pb-1 mb-1">
-                          {slot.hour_label} ({slot.is_on_peak ? 'On-Peak 5.80฿' : 'Off-Peak 2.64฿'})
+                          {slot.hour_label} ({slot.is_on_peak ? 'On-Peak 5.51฿' : 'Off-Peak 3.00฿'})
                         </div>
                         <div>โหลดรวม: <span className="font-mono text-amber-300">{slot.total_load_kw} kW</span></div>
                         <div>โซลาร์: <span className="font-mono text-emerald-300">{slot.solar_gen_kw} kW</span></div>
@@ -801,19 +875,19 @@ export default function TOUCalculatorPage() {
             <div>
               <h3 className="text-lg font-black text-white flex items-center gap-2">
                 <DollarSign className="h-5 w-5 text-emerald-400" />
-                ผลการคำนวณและเปรียบเทียบค่าไฟฟ้า (Financial Comparison & Net ROI)
+                ผลการคำนวณและเปรียบเทียบค่าไฟฟ้าตามความเป็นจริง (Authentic Electricity Bill Comparison)
               </h3>
               <p className="text-xs text-slate-400 mt-1">
-                เปรียบเทียบระหว่างมิเตอร์ปกติ (Flat Rate) กับมิเตอร์ TOU เมื่อบริหารจัดการโหลด 3 วงจร โซลาร์เซลล์ และ EV
+                เปรียบเทียบตามโครงสร้างอัตราค่าไฟฟ้าจริงของการไฟฟ้านครหลวงและการไฟฟ้าส่วนภูมิภาค (MEA &amp; PEA Tariffs 2567)
               </p>
             </div>
 
             {/* Big 4 KPI cards */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               <div className="bg-slate-950/80 rounded-2xl p-4 border border-slate-800">
-                <div className="text-xs text-slate-400">ค่าไฟปกติ (Flat Rate 4.42฿)</div>
+                <div className="text-xs text-slate-400">ค่าไฟมิเตอร์ปกติ (อัตราก้าวหน้า 1.2)</div>
                 <div className="text-2xl font-black text-slate-300 mt-1 font-mono">
-                  ฿{simResult.costs.monthly_flat_cost_thb.toLocaleString()}
+                  ฿{simResult.costs.monthly_flat_cost_thb.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </div>
                 <div className="text-[11px] text-slate-500 mt-0.5">
                   ตกวันละ ฿{simResult.costs.daily_flat_baseline_thb.toFixed(1)}
@@ -821,9 +895,9 @@ export default function TOUCalculatorPage() {
               </div>
 
               <div className="bg-slate-950/80 rounded-2xl p-4 border border-blue-500/30">
-                <div className="text-xs text-blue-300">ค่าไฟระบบใหม่ (TOU + Solar)</div>
+                <div className="text-xs text-blue-300">ค่าไฟมิเตอร์ TOU (อัตรา 1.3 + โซลาร์)</div>
                 <div className="text-2xl font-black text-blue-400 mt-1 font-mono">
-                  ฿{simResult.costs.monthly_tou_cost_thb.toLocaleString()}
+                  ฿{simResult.costs.monthly_tou_cost_thb.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </div>
                 <div className="text-[11px] text-slate-400 mt-0.5">
                   ตกวันละ ฿{simResult.costs.daily_tou_cost_thb.toFixed(1)}
@@ -833,10 +907,10 @@ export default function TOUCalculatorPage() {
               <div className="bg-slate-950/80 rounded-2xl p-4 border border-emerald-500/40">
                 <div className="text-xs text-emerald-300 font-semibold">ยอดเงินที่ประหยัดได้ / เดือน</div>
                 <div className="text-2xl font-black text-emerald-400 mt-1 font-mono">
-                  ฿{simResult.costs.monthly_savings_thb.toLocaleString()}
+                  ฿{simResult.costs.monthly_savings_thb.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </div>
                 <div className="text-[11px] text-emerald-300/80 mt-0.5">
-                  ลดลง {simResult.costs.daily_savings_pct}% จากเดิม
+                  ลดลง {simResult.costs.daily_savings_pct}% จากค่าไฟปกติ
                 </div>
               </div>
 
@@ -846,7 +920,180 @@ export default function TOUCalculatorPage() {
                   {simResult.costs.payback_period_years > 0 ? `${simResult.costs.payback_period_years} ปี` : 'ทันที'}
                 </div>
                 <div className="text-[11px] text-slate-500 mt-0.5">
-                  ประหยัดปีละ ฿{simResult.costs.yearly_savings_thb.toLocaleString()}
+                  ประหยัดปีละ ฿{simResult.costs.yearly_savings_thb.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </div>
+              </div>
+            </div>
+
+            {/* ─── Official MEA / PEA Invoice Comparison Breakdown ───── */}
+            <div className="rounded-2xl border border-slate-700/80 bg-slate-950/80 p-5 space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-3">
+                <div className="flex items-center gap-2">
+                  <ShieldCheck className="h-5 w-5 text-emerald-400" />
+                  <div>
+                    <h4 className="text-sm font-bold text-white">
+                      ใบแจ้งค่าไฟฟ้าเปรียบเทียบตามมาตรฐาน กฟน. / กฟภ. (Official Itemized Invoice)
+                    </h4>
+                    <p className="text-[11px] text-slate-400">
+                      แจกแจงตามเกณฑ์ประกาศ กกพ. (ค่าพลังงานฐาน + ค่า Ft + ค่าบริการ + VAT 7% + FiT โซลาร์)
+                    </p>
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-2 text-[10px] text-slate-300 font-mono">
+                  <span className="px-2 py-0.5 rounded bg-slate-800 border border-slate-700">Ft: 0.3972 ฿/หน่วย</span>
+                  <span className="px-2 py-0.5 rounded bg-slate-800 border border-slate-700">บริการ: 38.22 ฿/เดือน</span>
+                  <span className="px-2 py-0.5 rounded bg-slate-800 border border-slate-700">VAT: 7%</span>
+                  <span className="px-2 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/30">FiT ขายไฟ: 2.20 ฿</span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Left: Normal Progressive Bill Breakdown */}
+                <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4 space-y-3">
+                  <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="h-2.5 w-2.5 rounded-full bg-slate-400" />
+                      <span className="text-xs font-bold text-slate-200">มิเตอร์ปกติ (ประเภท 1.2 อัตราก้าวหน้า)</span>
+                    </div>
+                    <span className="text-xs font-mono font-bold text-slate-300">
+                      {(simResult.normal_bill_breakdown?.total_kwh || (simResult.totals.total_consumption_kwh * 30)).toFixed(1)} kWh / เดือน
+                    </span>
+                  </div>
+
+                  <div className="space-y-1.5 text-xs">
+                    <div className="text-[11px] text-slate-400 font-semibold mb-1">ค่าพลังงานไฟฟ้าฐาน (ขั้นบันได):</div>
+                    {simResult.normal_bill_breakdown?.steps_breakdown.map((step, idx) => (
+                      <div key={idx} className="flex justify-between items-center bg-slate-950/50 px-2.5 py-1.5 rounded border border-slate-800/60 text-[11px]">
+                        <span className="text-slate-300">
+                          {step.label} ({step.kwh.toFixed(1)} หน่วย @ {step.rate.toFixed(4)} ฿)
+                        </span>
+                        <span className="font-mono text-slate-200">฿{step.cost.toFixed(2)}</span>
+                      </div>
+                    ))}
+                    <div className="flex justify-between text-[11px] pt-1 px-1">
+                      <span className="text-slate-400">รวมค่าพลังงานไฟฟ้าฐาน:</span>
+                      <span className="font-mono text-slate-200">
+                        ฿{simResult.normal_bill_breakdown?.base_energy_cost_thb.toFixed(2)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-[11px] px-1">
+                      <span className="text-slate-400">ค่าบริการรายเดือน:</span>
+                      <span className="font-mono text-slate-200">
+                        ฿{simResult.normal_bill_breakdown?.service_charge_thb.toFixed(2) || '38.22'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-[11px] px-1">
+                      <span className="text-slate-400">ค่าไฟฟ้าผันแปร (Ft 0.3972 ฿/kWh):</span>
+                      <span className="font-mono text-slate-200">
+                        ฿{simResult.normal_bill_breakdown?.ft_cost_thb.toFixed(2)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-[11px] px-1 pt-1 border-t border-slate-800/80">
+                      <span className="text-slate-400">รวมเงินก่อนภาษี (Subtotal):</span>
+                      <span className="font-mono text-slate-300">
+                        ฿{simResult.normal_bill_breakdown?.subtotal_thb.toFixed(2)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-[11px] px-1">
+                      <span className="text-slate-400">ภาษีมูลค่าเพิ่ม (VAT 7%):</span>
+                      <span className="font-mono text-slate-300">
+                        ฿{simResult.normal_bill_breakdown?.vat_cost_thb.toFixed(2)}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-700/80 flex items-baseline justify-between bg-slate-950/70 p-3 rounded-xl border border-slate-800">
+                    <div>
+                      <div className="text-xs font-bold text-slate-300">รวมเงินค่าไฟฟ้าทั้งสิ้น</div>
+                      <div className="text-[10px] text-slate-500">
+                        อัตราเฉลี่ยจริง {simResult.normal_bill_breakdown?.effective_rate_thb_kwh.toFixed(2)} ฿/kWh
+                      </div>
+                    </div>
+                    <div className="text-lg font-black font-mono text-slate-200">
+                      ฿{simResult.costs.monthly_flat_cost_thb.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Right: TOU Bill Breakdown */}
+                <div className="rounded-xl border border-blue-500/30 bg-blue-950/20 p-4 space-y-3">
+                  <div className="flex items-center justify-between border-b border-blue-500/20 pb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="h-2.5 w-2.5 rounded-full bg-blue-400" />
+                      <span className="text-xs font-bold text-blue-200">มิเตอร์ TOU (ประเภท 1.3 แรงดัน &lt; 22 kV)</span>
+                    </div>
+                    <span className="text-xs font-mono font-bold text-blue-300">
+                      {(simResult.tou_bill_breakdown?.total_import_kwh || (simResult.totals.total_grid_import_kwh * 30)).toFixed(1)} kWh / เดือน
+                    </span>
+                  </div>
+
+                  <div className="space-y-1.5 text-xs">
+                    <div className="text-[11px] text-blue-300/80 font-semibold mb-1">ค่าพลังงานไฟฟ้าฐาน (แยกตามช่วงเวลา):</div>
+                    <div className="flex justify-between items-center bg-slate-950/50 px-2.5 py-1.5 rounded border border-rose-500/20 text-[11px]">
+                      <span className="text-rose-300">
+                        🔴 On-Peak ({(simResult.tou_bill_breakdown?.on_peak_kwh || (simResult.totals.on_peak_import_kwh * 30)).toFixed(1)} หน่วย @ 5.1135 ฿)
+                      </span>
+                      <span className="font-mono text-rose-300">
+                        ฿{simResult.tou_bill_breakdown?.on_peak_cost_thb.toFixed(2)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center bg-slate-950/50 px-2.5 py-1.5 rounded border border-emerald-500/20 text-[11px]">
+                      <span className="text-emerald-300">
+                        🟢 Off-Peak ({(simResult.tou_bill_breakdown?.off_peak_kwh || (simResult.totals.off_peak_import_kwh * 30)).toFixed(1)} หน่วย @ 2.6007 ฿)
+                      </span>
+                      <span className="font-mono text-emerald-300">
+                        ฿{simResult.tou_bill_breakdown?.off_peak_cost_thb.toFixed(2)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-[11px] pt-1 px-1">
+                      <span className="text-slate-400">รวมค่าพลังงานไฟฟ้าฐาน:</span>
+                      <span className="font-mono text-slate-200">
+                        ฿{simResult.tou_bill_breakdown?.base_energy_cost_thb.toFixed(2)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-[11px] px-1">
+                      <span className="text-slate-400">ค่าบริการรายเดือน:</span>
+                      <span className="font-mono text-slate-200">
+                        ฿{simResult.tou_bill_breakdown?.service_charge_thb.toFixed(2) || '38.22'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-[11px] px-1">
+                      <span className="text-slate-400">ค่าไฟฟ้าผันแปร (Ft 0.3972 ฿/kWh):</span>
+                      <span className="font-mono text-slate-200">
+                        ฿{simResult.tou_bill_breakdown?.ft_cost_thb.toFixed(2)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-[11px] px-1 pt-1 border-t border-slate-800/80">
+                      <span className="text-slate-400">รวมเงินก่อนภาษี (Subtotal):</span>
+                      <span className="font-mono text-slate-300">
+                        ฿{simResult.tou_bill_breakdown?.subtotal_thb.toFixed(2)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-[11px] px-1">
+                      <span className="text-slate-400">ภาษีมูลค่าเพิ่ม (VAT 7%):</span>
+                      <span className="font-mono text-slate-300">
+                        ฿{simResult.tou_bill_breakdown?.vat_cost_thb.toFixed(2)}
+                      </span>
+                    </div>
+                    {(simResult.tou_bill_breakdown?.export_kwh || 0) > 0 && (
+                      <div className="flex justify-between text-[11px] px-2.5 py-1 rounded bg-amber-500/10 border border-amber-500/30 text-amber-300">
+                        <span>☀️ หัก รายได้ขายไฟคืน FiT ({(simResult.tou_bill_breakdown?.export_kwh || 0).toFixed(1)} หน่วย @ 2.20 ฿):</span>
+                        <span className="font-mono font-bold">-฿{simResult.tou_bill_breakdown?.export_income_thb.toFixed(2)}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="pt-2 border-t border-blue-500/30 flex items-baseline justify-between bg-slate-950/70 p-3 rounded-xl border border-blue-500/30">
+                    <div>
+                      <div className="text-xs font-bold text-blue-300">รวมเงินค่าไฟฟ้าสุทธิ</div>
+                      <div className="text-[10px] text-slate-400">
+                        อัตราเฉลี่ยจริง {simResult.tou_bill_breakdown?.effective_rate_thb_kwh.toFixed(2)} ฿/kWh
+                      </div>
+                    </div>
+                    <div className="text-lg font-black font-mono text-emerald-400">
+                      ฿{simResult.costs.monthly_tou_cost_thb.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -895,13 +1142,13 @@ export default function TOUCalculatorPage() {
                 )}
 
                 <div className="grid grid-cols-12 gap-2 p-3 items-center bg-slate-900/40">
-                  <div className="col-span-5 text-white font-bold">ดึงไฟจากการไฟฟ้าช่วง On-Peak (5.80 บ.)</div>
+                  <div className="col-span-5 text-white font-bold">ดึงไฟจากการไฟฟ้าช่วง On-Peak (5.51 บ. รวม Ft)</div>
                   <div className="col-span-3 text-right font-mono text-rose-400 font-bold">{simResult.totals.on_peak_import_kwh} kWh</div>
                   <div className="col-span-4 text-right text-rose-300">฿{simResult.costs.on_peak_cost_thb.toFixed(1)} / วัน</div>
                 </div>
 
                 <div className="grid grid-cols-12 gap-2 p-3 items-center bg-slate-900/40">
-                  <div className="col-span-5 text-white font-bold">ดึงไฟจากการไฟฟ้าช่วง Off-Peak (2.64 บ.)</div>
+                  <div className="col-span-5 text-white font-bold">ดึงไฟจากการไฟฟ้าช่วง Off-Peak (3.00 บ. รวม Ft)</div>
                   <div className="col-span-3 text-right font-mono text-emerald-400 font-bold">{simResult.totals.off_peak_import_kwh} kWh</div>
                   <div className="col-span-4 text-right text-emerald-300">฿{simResult.costs.off_peak_cost_thb.toFixed(1)} / วัน</div>
                 </div>
