@@ -39,7 +39,7 @@ class EnergyAnalyticsEngine:
             FROM energy_readings r
             JOIN devices d ON r.device_id = d.device_id
             JOIN rooms rm ON d.room_id = rm.id
-            WHERE r.timestamp BETWEEN ? AND ?
+            WHERE r.timestamp BETWEEN ? AND ? AND d.device_id != 'circuit_solar'
             ORDER BY r.timestamp ASC
         """
         df = pd.read_sql_query(
