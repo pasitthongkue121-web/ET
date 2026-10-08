@@ -204,17 +204,17 @@ function SimulationStudioContent() {
     try {
       await saveScenario(activeResult);
       setSaveSuccess(true);
-      const updated = await getScenariosComparison();
-      setScenariosTable(updated);
-      const rec = await getAIRecommendation();
-      setRecommendation(rec);
+      const updated = await getScenariosComparison().catch(() => null);
+      if (updated) setScenariosTable(updated);
+      const rec = await getAIRecommendation().catch(() => null);
+      if (rec) setRecommendation(rec);
     } catch (err) {
       console.error('Failed to save scenario:', err);
     }
   };
 
   return (
-    <AppShell isBackendOnline={isBackendOnline} onRefresh={loadData} isLoading={isLoading}>
+    <AppShell isBackendOnline={isBackendOnline} onRefresh={loadInitialData} isLoading={isPageLoading || isLoading}>
       <div className="space-y-8">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800/80 pb-6">
