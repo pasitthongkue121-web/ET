@@ -783,84 +783,134 @@ export default function TOUCalculatorPage() {
                 แสดงการผลิตของโซลาร์, การทำงานของแบตเตอรี่, โหลด 3 วงจร และการชาร์จ EV แยกตามชั่วโมง On-Peak vs Off-Peak
               </p>
             </div>
-            <div className="flex items-center gap-3 text-[11px]">
-              <span className="flex items-center gap-1 text-rose-400">
-                <span className="h-2 w-2 rounded-full bg-rose-500" /> On-Peak (09:00 - 22:00)
+            <div className="flex flex-wrap items-center gap-3 text-[11px]">
+              <span className="flex items-center gap-1.5 text-slate-300">
+                <span className="h-2.5 w-2.5 rounded-sm bg-indigo-400" /> โหลดรวมบ้าน (Total Load)
               </span>
-              <span className="flex items-center gap-1 text-emerald-400">
-                <span className="h-2 w-2 rounded-full bg-emerald-500" /> Off-Peak (22:00 - 09:00)
+              <span className="flex items-center gap-1.5 text-amber-400">
+                <span className="h-2.5 w-2.5 rounded-sm bg-amber-400" /> ผลิตไฟโซลาร์ (Solar PV)
+              </span>
+              <span className="flex items-center gap-1.5 text-rose-400">
+                <span className="h-2.5 w-2.5 rounded-sm bg-rose-500" /> ดึงไฟหลวง On-Peak (5.51฿)
+              </span>
+              <span className="flex items-center gap-1.5 text-emerald-400">
+                <span className="h-2.5 w-2.5 rounded-sm bg-emerald-500" /> ดึงไฟหลวง Off-Peak (3.00฿)
               </span>
             </div>
           </div>
 
           {/* 24-Hour Bar Chart */}
-          {simResult && (
-            <div className="space-y-2">
-              <div className="h-64 flex items-end gap-1 sm:gap-1.5 pt-6 pb-2 px-1 bg-slate-950/60 rounded-xl border border-slate-800/80 overflow-x-auto">
-                {simResult.hourly_chart.map(slot => {
-                  const maxKw = 10.0; // scale factor
-                  const loadHeight = Math.min(100, (slot.total_load_kw / maxKw) * 100);
-                  const solarHeight = Math.min(100, (slot.solar_gen_kw / maxKw) * 100);
-                  const gridHeight = Math.min(100, (slot.grid_import_kw / maxKw) * 100);
-
-                  return (
-                    <div
-                      key={slot.hour}
-                      className={`flex-1 min-w-[28px] h-full flex flex-col justify-end items-center relative group rounded-t transition-colors ${
-                        slot.is_on_peak ? 'bg-rose-950/20' : 'bg-emerald-950/20'
-                      }`}
-                    >
-                      {/* Tooltip on hover */}
-                      <div className="absolute bottom-full mb-2 hidden group-hover:flex flex-col bg-slate-900 text-white text-[10px] p-2 rounded-lg shadow-xl border border-slate-700 z-30 whitespace-nowrap">
-                        <div className="font-bold border-b border-slate-800 pb-1 mb-1">
-                          {slot.hour_label} ({slot.is_on_peak ? 'On-Peak 5.51฿' : 'Off-Peak 3.00฿'})
-                        </div>
-                        <div>โหลดรวม: <span className="font-mono text-amber-300">{slot.total_load_kw} kW</span></div>
-                        <div>โซลาร์: <span className="font-mono text-emerald-300">{slot.solar_gen_kw} kW</span></div>
-                        {slot.bat_discharge_kw > 0 && (
-                          <div className="text-emerald-400">แบตจ่าย: {slot.bat_discharge_kw} kW</div>
-                        )}
-                        {slot.ev_load_kw > 0 && (
-                          <div className="text-sky-300">ชาร์จ EV: {slot.ev_load_kw} kW</div>
-                        )}
-                        <div className="text-rose-300">ดึงไฟหลวง: {slot.grid_import_kw} kW</div>
-                        {slot.bat_soc_pct > 0 && (
-                          <div className="text-slate-400">แบตคงเหลือ: {slot.bat_soc_pct}%</div>
-                        )}
-                      </div>
-
-                      {/* Bar columns */}
-                      <div className="w-full flex items-end justify-center gap-0.5 px-0.5">
-                        {/* Solar generation bar */}
-                        {slot.solar_gen_kw > 0 && (
-                          <div
-                            className="w-1.5 bg-amber-400 rounded-t"
-                            style={{ height: `${solarHeight}%` }}
-                          />
-                        )}
-                        {/* Grid import bar */}
-                        <div
-                          className={`w-2.5 rounded-t transition-all ${
-                            slot.is_on_peak ? 'bg-rose-500' : 'bg-emerald-500'
-                          }`}
-                          style={{ height: `${gridHeight}%` }}
-                        />
-                      </div>
-
-                      <div className="text-[9px] text-slate-500 mt-1">{slot.hour}h</div>
-                    </div>
+          {simResult ? (
+            <div className="space-y-3">
+              <div className="h-64 flex items-end gap-1 sm:gap-1.5 pt-6 pb-2 px-2 bg-slate-950/80 rounded-xl border border-slate-800/80 overflow-x-auto">
+                {(() => {
+                  const maxKw = Math.max(
+                    3.0,
+                    ...simResult.hourly_chart.map(s => Math.max(s.total_load_kw || 0, s.solar_gen_kw || 0, s.grid_import_kw || 0, s.ev_load_kw || 0))
                   );
-                })}
+                  return simResult.hourly_chart.map(slot => {
+                    const loadH = Math.min(100, Math.max(4, ((slot.total_load_kw || 0) / maxKw) * 100));
+                    const solarH = Math.min(100, Math.max(4, ((slot.solar_gen_kw || 0) / maxKw) * 100));
+                    const gridH = Math.min(100, Math.max(4, ((slot.grid_import_kw || 0) / maxKw) * 100));
+
+                    return (
+                      <div
+                        key={slot.hour}
+                        className={`flex-1 min-w-[28px] h-full flex flex-col justify-end items-center relative group rounded-t transition-colors ${
+                          slot.is_on_peak ? 'bg-rose-950/25 hover:bg-rose-950/40' : 'bg-emerald-950/25 hover:bg-emerald-950/40'
+                        }`}
+                      >
+                        {/* Tooltip on hover */}
+                        <div className="absolute bottom-full mb-2 hidden group-hover:flex flex-col bg-slate-900 text-white text-[10px] p-2.5 rounded-lg shadow-2xl border border-slate-700 z-30 whitespace-nowrap min-w-[140px]">
+                          <div className="font-bold border-b border-slate-800 pb-1 mb-1.5 text-white flex items-center justify-between">
+                            <span>{slot.hour_label}</span>
+                            <span className={`px-1.5 py-0.5 rounded text-[9px] ${slot.is_on_peak ? 'bg-rose-500/20 text-rose-300' : 'bg-emerald-500/20 text-emerald-300'}`}>
+                              {slot.is_on_peak ? 'On-Peak' : 'Off-Peak'}
+                            </span>
+                          </div>
+                          <div className="space-y-1">
+                            <div className="flex justify-between gap-2 text-slate-300">
+                              <span>⚡ โหลดบ้าน:</span>
+                              <span className="font-mono text-indigo-300 font-bold">{slot.total_load_kw} kW</span>
+                            </div>
+                            <div className="flex justify-between gap-2 text-slate-300">
+                              <span>☀️ โซลาร์:</span>
+                              <span className="font-mono text-amber-300 font-bold">{slot.solar_gen_kw} kW</span>
+                            </div>
+                            {slot.bat_discharge_kw > 0 && (
+                              <div className="flex justify-between gap-2 text-emerald-300">
+                                <span>🔋 แบตเตอรี่จ่าย:</span>
+                                <span className="font-mono font-bold">{slot.bat_discharge_kw} kW</span>
+                              </div>
+                            )}
+                            {slot.ev_load_kw > 0 && (
+                              <div className="flex justify-between gap-2 text-sky-300">
+                                <span>🚗 ชาร์จ EV:</span>
+                                <span className="font-mono font-bold">{slot.ev_load_kw} kW</span>
+                              </div>
+                            )}
+                            <div className="flex justify-between gap-2 text-slate-300 pt-1 border-t border-slate-800">
+                              <span>🏛️ ดึงไฟหลวง:</span>
+                              <span className={`font-mono font-bold ${slot.is_on_peak ? 'text-rose-400' : 'text-emerald-400'}`}>
+                                {slot.grid_import_kw} kW
+                              </span>
+                            </div>
+                            {slot.bat_soc_pct > 0 && (
+                              <div className="text-slate-400 text-[9px] pt-0.5">
+                                แบตเตอรี่คงเหลือ: {slot.bat_soc_pct}%
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Bar columns with explicit heights */}
+                        <div className="w-full h-44 sm:h-48 flex items-end justify-center gap-0.5 px-0.5">
+                          {/* 1. Household Load */}
+                          <div
+                            className="w-1.5 sm:w-2 bg-indigo-400/90 hover:bg-indigo-300 rounded-t transition-all shadow-sm shadow-indigo-500/20"
+                            style={{ height: `${loadH}%` }}
+                            title={`Load: ${slot.total_load_kw} kW`}
+                          />
+                          {/* 2. Solar PV generation */}
+                          {slot.solar_gen_kw > 0 && (
+                            <div
+                              className="w-1.5 sm:w-2 bg-amber-400 hover:bg-amber-300 rounded-t transition-all shadow-sm shadow-amber-500/20"
+                              style={{ height: `${solarH}%` }}
+                              title={`Solar: ${slot.solar_gen_kw} kW`}
+                            />
+                          )}
+                          {/* 3. Grid import */}
+                          <div
+                            className={`w-2 sm:w-2.5 rounded-t transition-all ${
+                              slot.is_on_peak
+                                ? 'bg-rose-500 hover:bg-rose-400 shadow-sm shadow-rose-500/30'
+                                : 'bg-emerald-500 hover:bg-emerald-400 shadow-sm shadow-emerald-500/30'
+                            }`}
+                            style={{ height: `${gridH}%` }}
+                            title={`Grid Import: ${slot.grid_import_kw} kW`}
+                          />
+                        </div>
+
+                        <div className="text-[9px] font-mono text-slate-400 mt-1">{slot.hour}h</div>
+                      </div>
+                    );
+                  });
+                })()}
               </div>
 
-              <div className="flex items-center justify-between text-xs text-slate-400 px-1">
+              <div className="flex items-center justify-between text-xs text-slate-400 px-1 font-mono">
                 <span>00:00 (เที่ยงคืน)</span>
-                <span>09:00 (เริ่ม On-Peak)</span>
-                <span>12:00 (พีคโซลาร์)</span>
-                <span>18:00 (แดดหมด / โหลดหนัก)</span>
-                <span>22:00 (เริ่ม Off-Peak)</span>
+                <span className="text-rose-400">09:00 (เริ่ม On-Peak)</span>
+                <span className="text-amber-400">12:00 (พีคโซลาร์)</span>
+                <span>18:00 (แดดหมด)</span>
+                <span className="text-emerald-400">22:00 (เริ่ม Off-Peak)</span>
                 <span>23:59</span>
               </div>
+            </div>
+          ) : (
+            <div className="h-64 flex flex-col items-center justify-center bg-slate-950/60 rounded-xl border border-slate-800/80 text-slate-400">
+              <RefreshCw className="h-6 w-6 animate-spin text-emerald-400 mb-2" />
+              <span className="text-xs">กำลังประมวลผลกราฟสมดุลพลังงาน 24 ชั่วโมง...</span>
             </div>
           )}
         </div>
