@@ -4,9 +4,14 @@ import React, { useState, useEffect, useCallback } from 'react';
 import AppShell from '../../components/AppShell';
 import { Zap, Activity, Cpu, RefreshCw, CheckCircle, AlertCircle, Layers } from '../../components/Icons';
 
-const API = '';  // Next.js proxy
+const API = process.env.NEXT_PUBLIC_API_URL || 'https://energy-twins-ai.onrender.com';
 
 const RATE = 4.42;  // THB/kWh
+
+const getAuthHeaders = (): Record<string, string> => {
+  const token = typeof window !== 'undefined' ? localStorage.getItem('energy_token') : null;
+  return token ? { 'Authorization': `Bearer ${token}` } : {};
+};
 
 const DEVICE_ICONS: Record<string, string> = {
   hvac: '❄️', appliance: '🔌', computing: '💻', entertainment: '📺',
@@ -96,7 +101,7 @@ export default function EnergyPlanPage() {
       const cleanId = 'dev_' + newDeviceName.trim().toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
       const r = await fetch(`${API}/api/devices`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify({
           device_id: cleanId,
           name: newDeviceName.trim(),
@@ -105,7 +110,10 @@ export default function EnergyPlanPage() {
           category: newDeviceCategory,
         }),
       });
-      if (!r.ok) throw new Error('Failed to create device');
+      if (!r.ok) {
+        const errData = await r.json().catch(() => ({}));
+        throw new Error(errData.detail || 'Failed to create device');
+      }
       showNotice('ok', `เพิ่มอุปกรณ์ "${newDeviceName}" ลงในระบบเรียบร้อยแล้ว`);
       setShowAddModal(false);
       setNewDeviceName('');
@@ -119,7 +127,9 @@ export default function EnergyPlanPage() {
 
   const loadDevices = useCallback(async () => {
     try {
-      const r = await fetch(`${API}/api/schedule/devices`);
+      const r = await fetch(`${API}/api/schedule/devices`, {
+        headers: { ...getAuthHeaders() }
+      });
       if (!r.ok) throw new Error('Failed');
       const data: Device[] = await r.json();
       setDevices(data);
@@ -151,7 +161,7 @@ export default function EnergyPlanPage() {
     try {
       const r = await fetch(`${API}/api/schedule/device/toggle`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify({ device_id, turn_on: turnOn }),
       });
       const d = await r.json();
@@ -169,7 +179,7 @@ export default function EnergyPlanPage() {
     try {
       const r = await fetch(`${API}/api/schedule/plan/simulate`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify({ plan_name: planName, schedules }),
       });
       const d: SimResult = await r.json();
@@ -208,7 +218,7 @@ export default function EnergyPlanPage() {
       if (resetDays && resetDays > 0) body.keep_days = resetDays;
       const r = await fetch(`${API}/api/schedule/data/reset`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify(body),
       });
       const d = await r.json();
