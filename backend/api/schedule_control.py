@@ -38,18 +38,25 @@ def get_schedulable_devices():
     repo = get_repository()
     devices = repo.get_devices()
 
-    conn = get_connection()
-    c = conn.cursor()
-    # Latest power reading per device
-    c.execute("""
-        SELECT device_id, power, energy, timestamp
-        FROM energy_readings
-        WHERE id IN (
-            SELECT MAX(id) FROM energy_readings GROUP BY device_id
-        )
-    """)
-    live = {row[0]: {"power": row[1], "energy": row[2], "last_seen": row[3]} for row in c.fetchall()}
-    conn.close()
+    live = {}
+    try:
+        conn = get_connection()
+        c = conn.cursor()
+        c.execute("""
+            SELECT device_id, power, energy, timestamp
+            FROM energy_readings
+            WHERE id IN (
+                SELECT MAX(id) FROM energy_readings GROUP BY device_id
+            )
+        """)
+        live = {row[0]: {"power": row[1], "energy": row[2], "last_seen": row[3]} for row in c.fetchall()}
+        conn.close()
+    except Exception:
+        try:
+            latest_list = repo.get_latest_device_readings()
+            live = {item["device_id"]: {"power": item.get("power", 0.0), "energy": item.get("energy", 0.0), "last_seen": item.get("timestamp")} for item in latest_list}
+        except Exception:
+            live = {}
 
     result = []
     for d in devices:
