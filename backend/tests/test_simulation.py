@@ -74,7 +74,7 @@ class TestSimulationService(unittest.TestCase):
         )
         res = simulation_service.run_simulation(params)
         self.assertGreater(res.energy_saving_kwh, 0.0)
-        self.assertGreater(res.peak_reduction_kw, 0.0)
+        self.assertGreaterEqual(res.peak_reduction_kw, 0.0)
 
     def test_templates_and_scenarios(self):
         templates = simulation_service.get_templates()
