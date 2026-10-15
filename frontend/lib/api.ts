@@ -460,7 +460,7 @@ export async function stopESP32Sim(): Promise<{ status: string; message: string 
 }
 
 export async function sendESP32TestPacket(
-  deviceId: string = 'living_room_ac',
+  deviceId: string = 'circuit_lighting',
   powerWatts: number = 1200.0,
   voltage: number = 230.0
 ): Promise<{ success: boolean; payload: any; results: any }> {
@@ -474,6 +474,85 @@ export async function sendESP32TestPacket(
     }),
   }, 10000);
   if (!res.ok) throw new Error(`Failed to send test packet: ${res.status}`);
+  return await res.json();
+}
+
+export interface CircuitItem {
+  circuit_id: string;
+  name: string;
+  category: string;
+  rated_power: number;
+}
+
+export interface PipelinePreviewSummary {
+  period: string;
+  start_time: string;
+  end_time: string;
+  interval_minutes: number;
+  total_records: number;
+  circuits_count: number;
+  estimated_consumption_kwh: number;
+  estimated_generation_kwh: number;
+  peak_watts: number;
+}
+
+export interface PipelinePreviewResponse {
+  status: string;
+  simulation_mode: boolean;
+  status_label: string;
+  batch_id: string;
+  data_source: string;
+  summary: PipelinePreviewSummary;
+  sample_preview: any[];
+}
+
+export interface PipelineTransmitResponse {
+  status: string;
+  message: string;
+  records_transmitted: number;
+  records_failed: number;
+  batch_id: string;
+  elapsed_seconds: number;
+  data_source: string;
+}
+
+export async function getSimulationCircuits(): Promise<{ circuits: CircuitItem[] }> {
+  const res = await fetchWithTimeout(`${API_BASE_URL}/api/gsheet/simulation/circuits`, {}, 5000);
+  if (!res.ok) throw new Error(`Failed to fetch circuits: ${res.status}`);
+  return await res.json();
+}
+
+export async function previewPipelineSimulation(data: {
+  devices?: string[];
+  period?: string;
+  start_time?: string;
+  end_time?: string;
+  interval_minutes?: number;
+  mode?: string;
+}): Promise<PipelinePreviewResponse> {
+  const res = await fetchWithTimeout(`${API_BASE_URL}/api/gsheet/simulation/preview`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  }, 10000);
+  if (!res.ok) throw new Error(`Failed to preview simulation: ${res.status}`);
+  return await res.json();
+}
+
+export async function transmitPipelineSimulation(data: {
+  devices?: string[];
+  period?: string;
+  start_time?: string;
+  end_time?: string;
+  interval_minutes?: number;
+  batch_id?: string;
+}): Promise<PipelineTransmitResponse> {
+  const res = await fetchWithTimeout(`${API_BASE_URL}/api/gsheet/simulation/transmit`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  }, 35000);
+  if (!res.ok) throw new Error(`Failed to transmit simulation: ${res.status}`);
   return await res.json();
 }
 
