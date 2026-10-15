@@ -8,12 +8,17 @@ import {
   startESP32Sim,
   stopESP32Sim,
   sendESP32TestPacket,
+  previewPipelineSimulation,
+  transmitPipelineSimulation,
   PipelineHealthResponse,
   ESP32SimStatus,
-  } from '../../lib/api';
+  PipelinePreviewResponse,
+  PipelineTransmitResponse,
+} from '../../lib/api';
 import {
   Zap, Activity, Cpu, Layers, RefreshCw, CheckCircle, AlertCircle,
-  Copy, ExternalLink, } from '../../components/Icons';
+  Copy, ExternalLink, Clock, Calendar, BarChart3, Check,
+} from '../../components/Icons';
 
 // ----------------------------------------------------------------------
 // Code Viewer Component
@@ -73,21 +78,57 @@ function StatusPill({ status }: { status: string }) {
   );
 }
 
-// ----------------------------------------------------------------------
-// MAIN PIPELINE PAGE
-// ----------------------------------------------------------------------
+const CIRCUIT_OPTIONS = [
+  { id: 'circuit_lighting', name: 'วงจรแสงสว่าง (Lighting)', category: 'lighting', icon: '💡', rated: '800 W' },
+  { id: 'circuit_receptacle', name: 'วงจรเต้ารับ (General Outlets)', category: 'receptacle', icon: '🔌', rated: '2,000 W' },
+  { id: 'circuit_heavy_load', name: 'โหลดหนัก (Heavy Load: AC/Heater)', category: 'heavy_load', icon: '❄️', rated: '5,000 W' },
+  { id: 'circuit_ev', name: 'เครื่องชาร์จ EV (EV Charging)', category: 'ev', icon: '🚗', rated: '7,400 W' },
+  { id: 'circuit_solar', name: 'โซลาร์เซลล์ (Solar PV Generation)', category: 'solar', icon: '☀️', rated: '5,000 W' },
+];
+
 export default function PipelinePage() {
   const [health, setHealth] = useState<PipelineHealthResponse | null>(null);
   const [simStatus, setSimStatus] = useState<ESP32SimStatus | null>(null);
-    
-  // Simulator controls
-  const [selectedDevice, setSelectedDevice] = useState<string>('living_room_ac');
+
+  // Tabs: 'batch_sim' (Primary simulation hub), 'live_stream', 'firmware'
+  const [activeTab, setActiveTab] = useState<'batch_sim' | 'live_stream' | 'firmware'>('batch_sim');
+
+  // Simulation Hub Parameters
+  const [period, setPeriod] = useState<'daily' | 'weekly' | 'monthly' | 'custom'>('daily');
+  const [intervalMinutes, setIntervalMinutes] = useState<number>(15);
+  const [selectedCircuits, setSelectedCircuits] = useState<string[]>([
+    'circuit_lighting',
+    'circuit_receptacle',
+    'circuit_heavy_load',
+    'circuit_ev',
+    'circuit_solar',
+  ]);
+  
+  // Date time inputs for custom range
+  const [customStart, setCustomStart] = useState<string>('');
+  const [customEnd, setCustomEnd] = useState<string>('');
+
+  // Preview & Transmission state
+  const [isPreviewing, setIsPreviewing] = useState<boolean>(false);
+  const [previewData, setPreviewData] = useState<PipelinePreviewResponse | null>(null);
+  const [isTransmitting, setIsTransmitting] = useState<boolean>(false);
+  const [transmitResult, setTransmitResult] = useState<PipelineTransmitResponse | null>(null);
+
+  // Real-time stream controls
+  const [singleDevice, setSingleDevice] = useState<string>('circuit_lighting');
   const [sliderWatts, setSliderWatts] = useState<number>(1200);
-    const [isStartingSim, setIsStartingSim] = useState(false);
+  const [isStartingSim, setIsStartingSim] = useState(false);
   const [isSendingPacket, setIsSendingPacket] = useState(false);
   const [actionMessage, setActionMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  const [activeTab, setActiveTab] = useState<'simulator' | 'firmware'>('simulator');
+  // Set default start/end dates
+  useEffect(() => {
+    const now = new Date();
+    const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    const formatDT = (d: Date) => d.toISOString().slice(0, 19).replace('T', ' ');
+    setCustomEnd(formatDT(now));
+    setCustomStart(formatDT(yesterday));
+  }, []);
 
   const refreshData = useCallback(async () => {
     try {
@@ -100,25 +141,103 @@ export default function PipelinePage() {
     } catch {}
   }, []);
 
-  // Auto-poll pipeline STATUS only (does not start simulator or write data)
   useEffect(() => {
     refreshData();
-        const interval = setInterval(refreshData, 5000);
+    const interval = setInterval(refreshData, 6000);
     return () => clearInterval(interval);
   }, [refreshData]);
 
+  const toggleCircuit = (cid: string) => {
+    setSelectedCircuits(prev =>
+      prev.includes(cid) ? prev.filter(x => x !== cid) : [...prev, cid]
+    );
+  };
 
+  const selectAllCircuits = () => {
+    setSelectedCircuits(CIRCUIT_OPTIONS.map(c => c.id));
+  };
 
+  const deselectAllCircuits = () => {
+    setSelectedCircuits([]);
+  };
+
+  // -------------------------------------------------------------------
+  // Handle Data Preview
+  // -------------------------------------------------------------------
+  const handlePreview = async () => {
+    if (selectedCircuits.length === 0) {
+      setActionMessage({ type: 'error', text: 'กรุณาเลือกอุปกรณ์ไฟฟ้าอย่างน้อย 1 รายการก่อนสร้างข้อมูลจำลอง' });
+      return;
+    }
+    setIsPreviewing(true);
+    setActionMessage(null);
+    setTransmitResult(null);
+    try {
+      const res = await previewPipelineSimulation({
+        devices: selectedCircuits,
+        period,
+        start_time: period === 'custom' ? customStart : undefined,
+        end_time: period === 'custom' ? customEnd : undefined,
+        interval_minutes: intervalMinutes,
+        mode: 'batch',
+      });
+      setPreviewData(res);
+      setActionMessage({
+        type: 'success',
+        text: `สร้างตัวอย่างข้อมูลจำลองสำเร็จ: รวม ${res.summary.total_records} รายการ (${res.batch_id})`,
+      });
+    } catch (err: any) {
+      setActionMessage({ type: 'error', text: err.message || 'สร้างข้อมูลจำลองไม่สำเร็จ' });
+    } finally {
+      setIsPreviewing(false);
+    }
+  };
+
+  // -------------------------------------------------------------------
+  // Handle Data Transmission to Database
+  // -------------------------------------------------------------------
+  const handleTransmit = async () => {
+    if (selectedCircuits.length === 0) {
+      setActionMessage({ type: 'error', text: 'กรุณาเลือกอุปกรณ์ไฟฟ้าอย่างน้อย 1 รายการ' });
+      return;
+    }
+    setIsTransmitting(true);
+    setActionMessage(null);
+    try {
+      const res = await transmitPipelineSimulation({
+        devices: selectedCircuits,
+        period,
+        start_time: period === 'custom' ? customStart : undefined,
+        end_time: period === 'custom' ? customEnd : undefined,
+        interval_minutes: intervalMinutes,
+        batch_id: previewData?.batch_id,
+      });
+      setTransmitResult(res);
+      setActionMessage({
+        type: 'success',
+        text: `ส่งข้อมูลผ่าน Pipeline สำเร็จ! บันทึกเข้า Database ${res.records_transmitted} รายการ (Batch ID: ${res.batch_id}) ในเวลา ${res.elapsed_seconds} วินาที`,
+      });
+      await refreshData();
+    } catch (err: any) {
+      setActionMessage({ type: 'error', text: err.message || 'ส่งข้อมูลผ่าน Pipeline ล้มเหลว' });
+    } finally {
+      setIsTransmitting(false);
+    }
+  };
+
+  // -------------------------------------------------------------------
+  // Real-Time Streaming Controls
+  // -------------------------------------------------------------------
   const handleToggleSim = async () => {
     setIsStartingSim(true);
     setActionMessage(null);
     try {
       if (simStatus?.running) {
         await stopESP32Sim();
-        setActionMessage({ type: 'success', text: 'Virtual ESP32 Simulator stopped.' });
+        setActionMessage({ type: 'success', text: 'หยุดการสตรีมมิ่งข้อมูลจำลอง Virtual ESP32 แล้ว' });
       } else {
-        await startESP32Sim(selectedDevice, 'direct_db', 15, sliderWatts);
-        setActionMessage({ type: 'success', text: `Virtual ESP32 Simulator started! Transmitting ${sliderWatts}W every 15s.` });
+        await startESP32Sim(singleDevice, 'direct_db', 15, sliderWatts);
+        setActionMessage({ type: 'success', text: `เริ่มการสตรีมมิ่งข้อมูลจำลอง ${singleDevice} (${sliderWatts}W) เข้าสู่ฐานข้อมูลทุก 15 วินาที` });
       }
       await refreshData();
     } catch (err: any) {
@@ -132,10 +251,10 @@ export default function PipelinePage() {
     setIsSendingPacket(true);
     setActionMessage(null);
     try {
-      const res = await sendESP32TestPacket(selectedDevice, sliderWatts, 230.0);
+      const res = await sendESP32TestPacket(singleDevice, sliderWatts, 230.0);
       setActionMessage({
         type: 'success',
-        text: `Telemetry packet injected! (${res.payload?.device_id || selectedDevice}: ${res.payload?.power_w || sliderWatts}W, 230V) -> Check Database & Dashboard!`
+        text: `ส่งข้อมูลทดสอบ 1 แพ็กเกจสำเร็จ! (${res.payload?.device_id || singleDevice}: ${res.payload?.power_w || sliderWatts}W, 230V) -> บันทึกด้วย data_source='simulated'`
       });
       await refreshData();
     } catch (err: any) {
@@ -145,11 +264,11 @@ export default function PipelinePage() {
     }
   };
 
-    const stages = [
+  const stages = [
     {
       num: 1,
-      title: 'Hardware ESP32',
-      sub: 'Physical IoT Sensors',
+      title: 'Simulation / ESP32',
+      sub: simStatus?.running ? '🟢 Continuous Stream Running' : 'Ready for Telemetry Ingestion',
       status: 'online',
       icon: <Cpu className="h-5 w-5 text-sky-400" />
     },
@@ -163,7 +282,7 @@ export default function PipelinePage() {
     {
       num: 3,
       title: 'Website Dashboard',
-      sub: 'Live 30s Visualizer',
+      sub: 'Live 30s Visualizer & TOU',
       status: 'online',
       icon: <Activity className="h-5 w-5 text-cyan-400" />
     }
@@ -180,10 +299,12 @@ export default function PipelinePage() {
                 <Zap className="h-5 w-5" />
               </span>
               <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white">
-                IoT Telemetry Pipeline
+                IoT Telemetry & Pipeline Hub
               </h1>
             </div>
-            <p className="mt-1 text-sm text-slate-400">Hardware ESP32 ➔ FastAPI Backend ➔ SQLite Database ➔ Website Dashboard</p>
+            <p className="mt-1 text-sm text-slate-400">
+              ศูนย์กลางการจำลอง ส่งต่อ และตรวจสอบท่อส่งข้อมูลการใช้ไฟฟ้า (Pipeline Hub Primary Interface)
+            </p>
           </div>
 
           <div className="flex items-center gap-2">
@@ -192,18 +313,48 @@ export default function PipelinePage() {
               className="flex items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs font-semibold text-slate-300 hover:bg-slate-800 transition"
             >
               <RefreshCw className="h-3.5 w-3.5" />
-              Check Status
+              Check Pipeline Status
             </button>
           </div>
         </div>
 
         {/* ------------------------------------------------------------- */}
-        {/* PIPELINE FLOWCHART                                    */}
+        {/* PERSISTENT SIMULATION MODE & REAL-DATA PROTECTION BANNER      */}
+        {/* ------------------------------------------------------------- */}
+        <div className="rounded-2xl border border-cyan-500/30 bg-gradient-to-r from-cyan-950/40 via-slate-900/60 to-blue-950/40 p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 backdrop-blur">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-500/20 border border-cyan-500/30 text-cyan-400 flex-shrink-0">
+              <Cpu className="h-5 w-5 animate-pulse" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
+                  <span className="h-2 w-2 rounded-full bg-cyan-400 animate-ping" />
+                  SIMULATION MODE ACTIVE
+                </span>
+                <span className="text-xs text-slate-400 font-mono">Pipeline Hub Telemetry</span>
+              </div>
+              <p className="text-xs text-slate-300 mt-1">
+                ทุกข้อมูลที่สร้างและส่งผ่าน Pipeline Hub จะถูกกำกับด้วย <code className="bg-slate-800 px-1 py-0.5 rounded text-cyan-300 font-mono">data_source = 'simulated'</code> และมีหมายเลข Batch ID กำกับเสมอ เพื่อป้องกันไม่ให้ข้อมูลจำลองปะปนกับข้อมูลจากเซนเซอร์จริง
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 flex-shrink-0 text-xs">
+            <div className="px-3 py-1.5 rounded-xl bg-slate-900/80 border border-slate-700 text-slate-300 flex items-center gap-2">
+              <span className="h-2 w-2 rounded-full bg-emerald-400" />
+              Real Hardware Protection: <strong className="text-emerald-400 font-semibold">Active</strong>
+            </div>
+          </div>
+        </div>
+
+        {/* ------------------------------------------------------------- */}
+        {/* PIPELINE ARCHITECTURE FLOWCHART                               */}
         {/* ------------------------------------------------------------- */}
         <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 backdrop-blur">
           <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-6 flex items-center gap-2">
             <Activity className="h-4 w-4 text-cyan-400" />
-            Live Pipeline Architecture
+            Live Pipeline Architecture & Provenance Flow
           </h2>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 relative">
@@ -224,7 +375,6 @@ export default function PipelinePage() {
                 <h3 className="text-sm font-bold text-white mb-1">{stage.title}</h3>
                 <p className="text-xs text-slate-400">{stage.sub}</p>
 
-                {/* Arrow to next hop */}
                 {idx < stages.length - 1 && (
                   <div className="hidden md:block absolute -right-4 top-1/2 -translate-y-1/2 z-10 text-slate-600 font-bold text-lg">
                     ➔
@@ -252,15 +402,26 @@ export default function PipelinePage() {
         {/* ------------------------------------------------------------- */}
         <div className="flex gap-2 border-b border-slate-800 pb-2">
           <button
-            onClick={() => setActiveTab('simulator')}
+            onClick={() => setActiveTab('batch_sim')}
             className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
-              activeTab === 'simulator'
+              activeTab === 'batch_sim'
+                ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30'
+                : 'text-slate-400 hover:text-white hover:bg-slate-900'
+            }`}
+          >
+            <BarChart3 className="h-4 w-4" />
+            Pipeline Simulation Hub (Batch & Historical)
+          </button>
+          <button
+            onClick={() => setActiveTab('live_stream')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
+              activeTab === 'live_stream'
                 ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30'
                 : 'text-slate-400 hover:text-white hover:bg-slate-900'
             }`}
           >
             <Cpu className="h-4 w-4" />
-            Virtual ESP32 Simulator
+            Continuous Virtual ESP32 Stream
           </button>
           <button
             onClick={() => setActiveTab('firmware')}
@@ -276,43 +437,371 @@ export default function PipelinePage() {
         </div>
 
         {/* ------------------------------------------------------------- */}
-        {/* TAB 1: VIRTUAL ESP32 SIMULATOR                                */}
+        {/* TAB 1: PRIMARY PIPELINE SIMULATION HUB                        */}
         {/* ------------------------------------------------------------- */}
-        {activeTab === 'simulator' && (
+        {activeTab === 'batch_sim' && (
+          <div className="space-y-6">
+            <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 space-y-6">
+              <div>
+                <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                  <BarChart3 className="h-5 w-5 text-sky-400" />
+                  เครื่องมือกำหนดและสร้างข้อมูลจำลอง (Simulation Configuration Engine)
+                </h3>
+                <p className="text-xs text-slate-400 mt-1">
+                  กำหนดช่วงเวลา อุปกรณ์ไฟฟ้า และความละเอียดการสุ่ม เพื่อสร้างและส่งข้อมูลจำลองตรงเข้าสู่ฐานข้อมูลและแดชบอร์ด
+                </p>
+              </div>
+
+              {/* 1. Period Selection */}
+              <div className="space-y-3">
+                <label className="text-xs font-semibold text-slate-300 flex items-center gap-2">
+                  <Calendar className="h-4 w-4 text-cyan-400" />
+                  1. เลือกระยะเวลาการจำลอง (Simulation Period):
+                </label>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {[
+                    { id: 'daily', label: 'Daily (รายวัน 24 ชม.)', desc: 'ข้อมูลย้อนหลัง 1 วัน' },
+                    { id: 'weekly', label: 'Weekly (รายสัปดาห์ 7 วัน)', desc: 'ข้อมูลย้อนหลัง 7 วัน' },
+                    { id: 'monthly', label: 'Monthly (รายเดือน 30 วัน)', desc: 'ข้อมูลย้อนหลัง 30 วัน' },
+                    { id: 'custom', label: 'Custom Range (กำหนดเอง)', desc: 'ระบุวันและเวลาเริ่มต้น-สิ้นสุด' },
+                  ].map(p => (
+                    <button
+                      key={p.id}
+                      onClick={() => setPeriod(p.id as any)}
+                      className={`p-3 rounded-xl border text-xs text-left transition ${
+                        period === p.id
+                          ? 'border-blue-500 bg-blue-500/10 text-white shadow-md'
+                          : 'border-slate-800 bg-slate-950/50 text-slate-400 hover:border-slate-700'
+                      }`}
+                    >
+                      <div className="font-bold">{p.label}</div>
+                      <div className="text-[11px] text-slate-500 mt-0.5">{p.desc}</div>
+                    </button>
+                  ))}
+                </div>
+
+                {/* Custom Date Range Picker */}
+                {period === 'custom' && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 rounded-xl border border-slate-800 bg-slate-950/80 mt-2">
+                    <div>
+                      <label className="text-xs text-slate-400 mb-1 block">Start Date & Time (YYYY-MM-DD HH:MM:SS):</label>
+                      <input
+                        type="text"
+                        value={customStart}
+                        onChange={e => setCustomStart(e.target.value)}
+                        placeholder="2026-10-14 00:00:00"
+                        className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs font-mono text-white focus:border-blue-500 outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-slate-400 mb-1 block">End Date & Time (YYYY-MM-DD HH:MM:SS):</label>
+                      <input
+                        type="text"
+                        value={customEnd}
+                        onChange={e => setCustomEnd(e.target.value)}
+                        placeholder="2026-10-15 12:00:00"
+                        className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs font-mono text-white focus:border-blue-500 outline-none"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* 2. Sampling Interval */}
+              <div className="space-y-3">
+                <label className="text-xs font-semibold text-slate-300 flex items-center gap-2">
+                  <Clock className="h-4 w-4 text-amber-400" />
+                  2. ความถี่การสุ่มตัวอย่างข้อมูล (Sampling Interval):
+                </label>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {[
+                    { mins: 1, label: '1 นาที (High-Resolution)', desc: 'ละเอียดสูงสุด เหมาะกับวิเคราะห์พีคโหลด' },
+                    { mins: 5, label: '5 นาที (Standard IoT)', desc: 'มาตรฐานระบบ Telemetry อุตสาหกรรม' },
+                    { mins: 15, label: '15 นาที (TOU Standard)', desc: 'มาตรฐานการคิดค่าไฟ TOU และพยากรณ์ AI' },
+                    { mins: 60, label: '60 นาที (Hourly)', desc: 'ระดับรายชั่วโมง สำหรับสรุปภาพรวมรายเดือน' },
+                  ].map(item => (
+                    <button
+                      key={item.mins}
+                      onClick={() => setIntervalMinutes(item.mins)}
+                      className={`p-3 rounded-xl border text-xs text-left transition ${
+                        intervalMinutes === item.mins
+                          ? 'border-amber-500 bg-amber-500/10 text-white shadow-md'
+                          : 'border-slate-800 bg-slate-950/50 text-slate-400 hover:border-slate-700'
+                      }`}
+                    >
+                      <div className="font-bold">{item.label}</div>
+                      <div className="text-[11px] text-slate-500 mt-0.5">{item.desc}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* 3. Electrical Devices / Circuits (5 Categories) */}
+              <div className="space-y-3">
+                <div className="flex justify-between items-center">
+                  <label className="text-xs font-semibold text-slate-300 flex items-center gap-2">
+                    <Zap className="h-4 w-4 text-emerald-400" />
+                    3. วงจรและอุปกรณ์ไฟฟ้าที่ต้องการจำลอง (5 หมวดหมู่วงจรไฟฟ้า):
+                  </label>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={selectAllCircuits}
+                      className="text-[11px] text-blue-400 hover:underline px-2 py-0.5"
+                    >
+                      เลือกทั้งหมด
+                    </button>
+                    <span className="text-slate-600">|</span>
+                    <button
+                      onClick={deselectAllCircuits}
+                      className="text-[11px] text-slate-400 hover:underline px-2 py-0.5"
+                    >
+                      ยกเลิกทั้งหมด
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {CIRCUIT_OPTIONS.map(circuit => {
+                    const isSelected = selectedCircuits.includes(circuit.id);
+                    return (
+                      <div
+                        key={circuit.id}
+                        onClick={() => toggleCircuit(circuit.id)}
+                        className={`p-3.5 rounded-xl border cursor-pointer transition flex items-center justify-between ${
+                          isSelected
+                            ? 'border-emerald-500/50 bg-emerald-950/20 text-white shadow-sm'
+                            : 'border-slate-800 bg-slate-950/40 text-slate-400 hover:border-slate-700'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <span className="text-lg">{circuit.icon}</span>
+                          <div>
+                            <div className="font-bold text-xs">{circuit.name}</div>
+                            <div className="text-[11px] text-slate-500">พิกัดโหลด: {circuit.rated}</div>
+                          </div>
+                        </div>
+                        <div className={`w-5 h-5 rounded-md border flex items-center justify-center transition ${
+                          isSelected ? 'bg-emerald-500 border-emerald-500 text-slate-950' : 'border-slate-700 bg-slate-900'
+                        }`}>
+                          {isSelected && <Check className="h-3.5 w-3.5 stroke-[3]" />}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex flex-wrap gap-4 pt-4 border-t border-slate-800">
+                <button
+                  onClick={handlePreview}
+                  disabled={isPreviewing}
+                  className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-50 px-5 py-3 text-xs font-bold text-white transition shadow-lg shadow-blue-600/20"
+                >
+                  <BarChart3 className={`h-4 w-4 ${isPreviewing ? 'animate-spin' : ''}`} />
+                  {isPreviewing ? 'กำลังประมวลผลตัวอย่าง...' : '1. ตรวจสอบข้อมูลก่อนส่ง (Preview Simulation)'}
+                </button>
+
+                <button
+                  onClick={handleTransmit}
+                  disabled={isTransmitting || !previewData}
+                  className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 px-5 py-3 text-xs font-bold text-white transition shadow-lg shadow-emerald-600/20"
+                >
+                  <Zap className={`h-4 w-4 ${isTransmitting ? 'animate-spin' : ''}`} />
+                  {isTransmitting ? 'กำลังส่งข้อมูลผ่าน Pipeline...' : '2. ส่งข้อมูลเข้าสู่ระบบ (Transmit to Database)'}
+                </button>
+              </div>
+            </div>
+
+            {/* ------------------------------------------------------------- */}
+            {/* DATA PREVIEW & TRANSMISSION REPORT                            */}
+            {/* ------------------------------------------------------------- */}
+            {previewData && (
+              <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 space-y-6">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-4">
+                  <div>
+                    <h3 className="text-base font-bold text-white flex items-center gap-2">
+                      <BarChart3 className="h-5 w-5 text-emerald-400" />
+                      ผลการพรีวิวข้อมูลจำลอง (Simulation Preview Metrics)
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      Batch ID: <span className="font-mono text-cyan-300">{previewData.batch_id}</span> | Data Source: <span className="font-mono text-amber-300 font-bold">{previewData.data_source}</span>
+                    </p>
+                  </div>
+
+                  <span className="px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                    พร้อมส่งเข้าสู่ระบบ (Ready to Transmit)
+                  </span>
+                </div>
+
+                {/* Metrics Badges */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                  <div className="p-4 rounded-xl border border-slate-800 bg-slate-950">
+                    <span className="text-xs text-slate-500">จำนวนข้อมูลทั้งหมด</span>
+                    <div className="text-xl font-black text-white mt-1">{previewData.summary.total_records.toLocaleString()} <span className="text-xs font-normal text-slate-400">Records</span></div>
+                    <span className="text-[10px] text-slate-500">{previewData.summary.circuits_count} วงจรไฟฟ้า</span>
+                  </div>
+
+                  <div className="p-4 rounded-xl border border-slate-800 bg-slate-950">
+                    <span className="text-xs text-slate-500">พลังงานไฟฟ้ารวม (โหลด)</span>
+                    <div className="text-xl font-black text-cyan-400 mt-1">{previewData.summary.estimated_consumption_kwh.toLocaleString()} <span className="text-xs font-normal text-slate-400">kWh</span></div>
+                    <span className="text-[10px] text-slate-500">คำนวณตามช่วงเวลา</span>
+                  </div>
+
+                  <div className="p-4 rounded-xl border border-slate-800 bg-slate-950">
+                    <span className="text-xs text-slate-500">พลังงานแสงอาทิตย์ (โซลาร์)</span>
+                    <div className="text-xl font-black text-amber-400 mt-1">{previewData.summary.estimated_generation_kwh.toLocaleString()} <span className="text-xs font-normal text-slate-400">kWh</span></div>
+                    <span className="text-[10px] text-slate-500">ผลิตพลังงานสะอาด</span>
+                  </div>
+
+                  <div className="p-4 rounded-xl border border-slate-800 bg-slate-950">
+                    <span className="text-xs text-slate-500">กำลังไฟฟ้าสูงสุด (Peak)</span>
+                    <div className="text-xl font-black text-rose-400 mt-1">{previewData.summary.peak_watts.toLocaleString()} <span className="text-xs font-normal text-slate-400">W</span></div>
+                    <span className="text-[10px] text-slate-500">จุดสูงสุดของโหลด</span>
+                  </div>
+                </div>
+
+                {/* Sample Preview Table */}
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="font-semibold text-slate-300">ตัวอย่างข้อมูล 12 รายการแรก (Sample Records Preview):</span>
+                    <span className="text-slate-500 text-[11px]">ช่วงเวลา: {previewData.summary.start_time} ถึง {previewData.summary.end_time}</span>
+                  </div>
+
+                  <div className="overflow-x-auto rounded-xl border border-slate-800">
+                    <table className="w-full text-left text-xs font-mono">
+                      <thead className="bg-slate-950 text-slate-400 border-b border-slate-800">
+                        <tr>
+                          <th className="p-2.5">Timestamp</th>
+                          <th className="p-2.5">Circuit / Device</th>
+                          <th className="p-2.5">Power (W)</th>
+                          <th className="p-2.5">Voltage</th>
+                          <th className="p-2.5">Current (A)</th>
+                          <th className="p-2.5">Energy (kWh)</th>
+                          <th className="p-2.5">Source Tag</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-800/60 bg-slate-900/40 text-slate-300">
+                        {previewData.sample_preview.map((row, idx) => (
+                          <tr key={idx} className="hover:bg-slate-800/30">
+                            <td className="p-2.5 text-slate-400">{row.timestamp}</td>
+                            <td className="p-2.5 font-bold text-white flex items-center gap-1.5">
+                              {row.is_generation ? '☀️' : '⚡'} {row.name || row.device_id}
+                            </td>
+                            <td className={`p-2.5 font-bold ${row.is_generation ? 'text-amber-400' : 'text-cyan-400'}`}>
+                              {row.power} W
+                            </td>
+                            <td className="p-2.5 text-slate-400">{row.voltage} V</td>
+                            <td className="p-2.5 text-slate-400">{row.current} A</td>
+                            <td className="p-2.5 text-slate-300">{row.energy}</td>
+                            <td className="p-2.5">
+                              <span className="px-2 py-0.5 rounded text-[10px] bg-amber-500/10 text-amber-400 border border-amber-500/20 font-sans font-semibold">
+                                {row.data_source}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* Transmit Action CTA inside Preview */}
+                <div className="flex justify-end pt-2">
+                  <button
+                    onClick={handleTransmit}
+                    disabled={isTransmitting}
+                    className="flex items-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 px-6 py-3 text-xs font-bold text-white transition shadow-lg shadow-emerald-600/30"
+                  >
+                    <Zap className={`h-4 w-4 ${isTransmitting ? 'animate-spin' : ''}`} />
+                    {isTransmitting ? 'กำลังส่งข้อมูลเข้าสู่ระบบ...' : 'ยืนยันการส่งข้อมูลเข้าสู่ระบบ (Transmit Now)'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* ------------------------------------------------------------- */}
+            {/* TRANSMISSION RESULT BANNER                                    */}
+            {/* ------------------------------------------------------------- */}
+            {transmitResult && (
+              <div className="rounded-2xl border border-emerald-500/40 bg-emerald-950/20 p-6 space-y-4">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 flex-shrink-0">
+                    <CheckCircle className="h-6 w-6" />
+                  </div>
+                  <div>
+                    <h4 className="text-base font-bold text-white">บันทึกข้อมูลจำลองผ่าน Pipeline สำเร็จ!</h4>
+                    <p className="text-xs text-emerald-300/90 mt-0.5">
+                      ข้อมูลถูกส่งผ่านท่อส่งข้อมูล (Pipeline Hub) และบันทึกลงฐานข้อมูลเรียบร้อยแล้ว
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2 text-xs font-mono">
+                  <div className="bg-slate-950/80 p-3 rounded-xl border border-slate-800">
+                    <span className="text-slate-500 block text-[11px] font-sans">จำนวนข้อมูลที่บันทึก</span>
+                    <strong className="text-white text-base">{transmitResult.records_transmitted} Records</strong>
+                  </div>
+                  <div className="bg-slate-950/80 p-3 rounded-xl border border-slate-800">
+                    <span className="text-slate-500 block text-[11px] font-sans">จำนวนข้อผิดพลาด</span>
+                    <strong className="text-emerald-400 text-base">{transmitResult.records_failed} Errors</strong>
+                  </div>
+                  <div className="bg-slate-950/80 p-3 rounded-xl border border-slate-800">
+                    <span className="text-slate-500 block text-[11px] font-sans">เวลาที่ใช้ส่ง (Latency)</span>
+                    <strong className="text-cyan-400 text-base">{transmitResult.elapsed_seconds} s</strong>
+                  </div>
+                  <div className="bg-slate-950/80 p-3 rounded-xl border border-slate-800">
+                    <span className="text-slate-500 block text-[11px] font-sans">Data Source Identifier</span>
+                    <strong className="text-amber-400 text-base">{transmitResult.data_source}</strong>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between text-xs pt-2 text-slate-400">
+                  <span>Batch ID: <code className="text-cyan-300 font-mono">{transmitResult.batch_id}</code></span>
+                  <a
+                    href="/"
+                    className="inline-flex items-center gap-1.5 text-cyan-400 hover:text-cyan-300 font-bold hover:underline"
+                  >
+                    เปิดดูแดชบอร์ดหลัก (Dashboard) <ExternalLink className="h-3.5 w-3.5" />
+                  </a>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ------------------------------------------------------------- */}
+        {/* TAB 2: CONTINUOUS REAL-TIME STREAM CONSOLE                    */}
+        {/* ------------------------------------------------------------- */}
+        {activeTab === 'live_stream' && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            {/* Control Panel */}
             <div className="lg:col-span-7 rounded-2xl border border-slate-800 bg-slate-900/60 p-6 space-y-6">
               <div>
                 <h3 className="text-lg font-bold text-white flex items-center gap-2">
                   <Cpu className="h-5 w-5 text-sky-400" />
-                  Virtual ESP32 Device Console
+                  Virtual ESP32 Live Stream Console
                 </h3>
                 <p className="text-xs text-slate-400 mt-1">
-                  จำลองการส่งข้อมูลเสมือนมีบอร์ด ESP32 วัดพลังงานจริง บันทึกลง Database และแสดงผลบนแดชบอร์ดทันที
+                  จำลองการส่งข้อมูลแบบเรียลไทม์อย่างต่อเนื่องเสมือนมีบอร์ด ESP32 วัดพลังงานจริง บันทึกลง Database ทุกๆ 15-60 วินาที
                 </p>
               </div>
 
               {/* Device Preset */}
               <div className="space-y-2">
-                <label className="text-xs font-semibold text-slate-300">Select Appliance (อุปกรณ์):</label>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  {[
-                    { id: 'living_room_ac', name: 'Inverter AC', w: 1250 },
-                    { id: 'kitchen_fridge', name: 'Refrigerator', w: 140 },
-                    { id: 'study_pc', name: 'Workstation', w: 320 },
-                    { id: 'solar_rooftop', name: 'Solar PV', w: 2200 },
-                  ].map(dev => (
+                <label className="text-xs font-semibold text-slate-300">Select Appliance (วงจรที่ต้องการทดสอบ):</label>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {CIRCUIT_OPTIONS.map(dev => (
                     <button
                       key={dev.id}
-                      onClick={() => { setSelectedDevice(dev.id); setSliderWatts(dev.w); }}
+                      onClick={() => setSingleDevice(dev.id)}
                       className={`p-2.5 rounded-xl border text-xs font-medium text-left transition ${
-                        selectedDevice === dev.id
+                        singleDevice === dev.id
                           ? 'border-blue-500 bg-blue-500/10 text-white'
                           : 'border-slate-800 bg-slate-950/50 text-slate-400 hover:border-slate-700'
                       }`}
                     >
-                      <div className="font-bold">{dev.name}</div>
-                      <div className="text-[11px] text-slate-500">~{dev.w} W</div>
+                      <div className="font-bold">{dev.icon} {dev.name}</div>
+                      <div className="text-[11px] text-slate-500">{dev.rated}</div>
                     </button>
                   ))}
                 </div>
@@ -321,22 +810,22 @@ export default function PipelinePage() {
               {/* Watts Slider */}
               <div className="space-y-2 bg-slate-950/60 p-4 rounded-xl border border-slate-800">
                 <div className="flex justify-between items-center text-xs">
-                  <span className="text-slate-300 font-semibold">Simulated Power (กำลังไฟฟ้า):</span>
+                  <span className="text-slate-300 font-semibold">Simulated Power (กำลังไฟฟ้าจำลอง):</span>
                   <span className="font-mono text-cyan-400 font-bold text-sm">{sliderWatts} Watts</span>
                 </div>
                 <input
                   type="range"
                   min="0"
-                  max="3500"
-                  step="25"
+                  max="7400"
+                  step="50"
                   value={sliderWatts}
                   onChange={e => setSliderWatts(Number(e.target.value))}
                   className="w-full accent-blue-500 h-2 bg-slate-800 rounded-lg cursor-pointer"
                 />
                 <div className="flex justify-between text-[10px] text-slate-500">
                   <span>0 W (Off)</span>
-                  <span>1,500 W (High)</span>
-                  <span>3,500 W (Peak)</span>
+                  <span>3,500 W (High)</span>
+                  <span>7,400 W (EV Peak)</span>
                 </div>
               </div>
 
@@ -352,7 +841,7 @@ export default function PipelinePage() {
                   }`}
                 >
                   <Cpu className="h-4 w-4" />
-                  {simStatus?.running ? 'Stop Continuous Simulator' : 'Start Virtual ESP32 Stream'}
+                  {simStatus?.running ? 'Stop Continuous Simulator' : 'Start Continuous Virtual ESP32 Stream'}
                 </button>
 
                 <button
@@ -409,7 +898,7 @@ export default function PipelinePage() {
         )}
 
         {/* ------------------------------------------------------------- */}
-        {/* TAB 2: ESP32 ARDUINO C++ FIRMWARE CODE                        */}
+        {/* TAB 3: ESP32 ARDUINO C++ FIRMWARE CODE                        */}
         {/* ------------------------------------------------------------- */}
         {activeTab === 'firmware' && (
           <div className="space-y-4">
@@ -441,7 +930,7 @@ void sendTelemetry(float power_w, float energy_kwh) {
   http.begin(client, BACKEND_URL);
   http.addHeader("Content-Type", "application/json");
 
-  String json = "{\\"device_id\\":\\"living_room_ac\\",\\"power_w\\":" + String(power_w) + ",\\"voltage\\":230.0,\\"energy_kwh\\":" + String(energy_kwh) + "}";
+  String json = "{\\"device_id\\":\\"circuit_lighting\\",\\"power_w\\":" + String(power_w) + ",\\"voltage\\":230.0,\\"energy_kwh\\":" + String(energy_kwh) + "}";
   int httpCode = http.POST(json);
   Serial.printf("Response: %d\\n", httpCode);
   http.end();
