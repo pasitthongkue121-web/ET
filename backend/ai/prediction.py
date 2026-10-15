@@ -64,6 +64,7 @@ class AIEnergyPredictionEngine:
         # In sqlite it grouped by timestamp. Here it might have multiple devices per timestamp.
         # We need to aggregate by timestamp to get total power.
         df = df.groupby("timestamp").agg({
+            "dt": "first",
             "power": "sum",
             "energy": "sum",
             "temperature": "mean",
@@ -78,6 +79,11 @@ class AIEnergyPredictionEngine:
         
         if len(df) < 50:
             return pd.DataFrame()
+
+        df["minute"] = 0
+        df["lag_power_1h"] = df["power"].shift(4).bfill().fillna(0)
+        df["lag_power_24h"] = df["power"].shift(96).bfill().fillna(0)
+        df["rolling_mean_3h"] = df["power"].rolling(12, min_periods=1).mean().bfill().fillna(0)
             
         df.fillna(0, inplace=True)
         return df
