@@ -2,6 +2,9 @@ from fastapi import APIRouter, HTTPException, Request, Body
 from pydantic import BaseModel
 from typing import Optional, Dict, Any, List
 
+from datetime import datetime, timedelta
+import uuid
+
 from backend.services.gsheet_service import (
     get_sync_status,
     save_sheet_url,
@@ -22,16 +25,34 @@ class ConnectRequest(BaseModel):
 
 
 class SimStartRequest(BaseModel):
-    device_id: Optional[str] = "living_room_ac"
+    device_id: Optional[str] = "circuit_lighting"
     target: Optional[str] = "both"  # "apps_script", "direct_db", "both"
     interval: Optional[int] = 15
     power_watts: Optional[float] = None
 
 
 class SimTestPacketRequest(BaseModel):
-    device_id: Optional[str] = "living_room_ac"
+    device_id: Optional[str] = "circuit_lighting"
     power_watts: Optional[float] = 1250.0
     voltage: Optional[float] = 230.0
+
+
+class PipelineSimPreviewRequest(BaseModel):
+    devices: Optional[List[str]] = None
+    period: Optional[str] = "daily"
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
+    interval_minutes: Optional[int] = 15
+    mode: Optional[str] = "batch"
+
+
+class PipelineSimTransmitRequest(BaseModel):
+    devices: Optional[List[str]] = None
+    period: Optional[str] = "daily"
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
+    interval_minutes: Optional[int] = 15
+    batch_id: Optional[str] = None
 
 
 @router.get("/status")
@@ -255,6 +276,123 @@ def sim_send_test(req: SimTestPacketRequest):
         reading["voltage"] = req.voltage
         reading["current"] = round(reading["power_w"] / req.voltage, 2)
     return esp32_simulator.send_packet(reading)
+
+
+@router.get("/simulation/circuits")
+def get_simulation_circuits():
+    """Returns the 5 primary electrical circuits for simulation."""
+    return {
+        "status": "success",
+        "circuits": esp32_simulator.get_supported_circuits()
+    }
+
+
+@router.post("/simulation/preview")
+def preview_simulation_data(req: PipelineSimPreviewRequest):
+    """
+    Generates preview metrics and sample records for Pipeline Hub
+    without saving to the database.
+    """
+    now = datetime.now()
+    if req.period == "daily":
+        start = now - timedelta(days=1)
+        end = now
+    elif req.period == "weekly":
+        start = now - timedelta(days=7)
+        end = now
+    elif req.period == "monthly":
+        start = now - timedelta(days=30)
+        end = now
+    elif req.period == "custom":
+        try:
+            start = datetime.strptime(req.start_time, "%Y-%m-%d %H:%M:%S") if req.start_time else (now - timedelta(days=1))
+            end = datetime.strptime(req.end_time, "%Y-%m-%d %H:%M:%S") if req.end_time else now
+        except Exception:
+            start = now - timedelta(days=1)
+            end = now
+    else:
+        start = now - timedelta(days=1)
+        end = now
+
+    batch_tag = f"sim_batch_{now.strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:6]}"
+    inv = req.interval_minutes or 15
+
+    readings = esp32_simulator.generate_dataset(
+        circuit_ids=req.devices,
+        start_time=start,
+        end_time=end,
+        interval_minutes=inv,
+        batch_id=batch_tag
+    )
+
+    total_records = len(readings)
+    total_energy_kwh = round(sum(r.get("energy", 0.0) for r in readings if not r.get("is_generation")), 2)
+    solar_kwh = round(sum(r.get("energy", 0.0) for r in readings if r.get("is_generation")), 2)
+    peak_watts = max((r.get("power", 0.0) for r in readings if not r.get("is_generation")), default=0.0)
+
+    sample_preview = readings[:12]
+
+    return {
+        "status": "success",
+        "simulation_mode": True,
+        "status_label": "SIMULATION MODE — ข้อมูลจำลองพร้อมส่งเข้าสู่ระบบ (Simulated Data Only)",
+        "batch_id": batch_tag,
+        "data_source": "simulated",
+        "summary": {
+            "period": req.period,
+            "start_time": start.strftime("%Y-%m-%d %H:%M:%S"),
+            "end_time": end.strftime("%Y-%m-%d %H:%M:%S"),
+            "interval_minutes": inv,
+            "total_records": total_records,
+            "circuits_count": len(req.devices) if req.devices else len(esp32_simulator.get_supported_circuits()),
+            "estimated_consumption_kwh": total_energy_kwh,
+            "estimated_generation_kwh": solar_kwh,
+            "peak_watts": round(peak_watts, 1),
+        },
+        "sample_preview": sample_preview
+    }
+
+
+@router.post("/simulation/transmit")
+def transmit_simulation_data(req: PipelineSimTransmitRequest):
+    """
+    Transmits generated records directly to repository and database.
+    Stamps every record with data_source='simulated' and simulation_batch_id.
+    """
+    now = datetime.now()
+    if req.period == "daily":
+        start = now - timedelta(days=1)
+        end = now
+    elif req.period == "weekly":
+        start = now - timedelta(days=7)
+        end = now
+    elif req.period == "monthly":
+        start = now - timedelta(days=30)
+        end = now
+    elif req.period == "custom":
+        try:
+            start = datetime.strptime(req.start_time, "%Y-%m-%d %H:%M:%S") if req.start_time else (now - timedelta(days=1))
+            end = datetime.strptime(req.end_time, "%Y-%m-%d %H:%M:%S") if req.end_time else now
+        except Exception:
+            start = now - timedelta(days=1)
+            end = now
+    else:
+        start = now - timedelta(days=1)
+        end = now
+
+    batch_tag = req.batch_id or f"sim_batch_{now.strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:6]}"
+    inv = req.interval_minutes or 15
+
+    readings = esp32_simulator.generate_dataset(
+        circuit_ids=req.devices,
+        start_time=start,
+        end_time=end,
+        interval_minutes=inv,
+        batch_id=batch_tag
+    )
+
+    result = esp32_simulator.transmit_batch(readings)
+    return result
 
 
 # -------------------------------------------------------------------
