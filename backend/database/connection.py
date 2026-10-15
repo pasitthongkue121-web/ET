@@ -53,13 +53,27 @@ def init_db():
         temperature REAL DEFAULT 25.0,
         humidity REAL DEFAULT 60.0,
         occupancy INTEGER DEFAULT 1,
+        data_source TEXT DEFAULT 'simulated',
+        simulation_batch_id TEXT,
+        validation_status TEXT DEFAULT 'valid',
         FOREIGN KEY (device_id) REFERENCES devices(device_id)
     );
     """)
 
+    # Safe migration: add columns if table already exists without them
+    cursor.execute("PRAGMA table_info(energy_readings)")
+    existing_cols = {row["name"] for row in cursor.fetchall()}
+    if "data_source" not in existing_cols:
+        cursor.execute("ALTER TABLE energy_readings ADD COLUMN data_source TEXT DEFAULT 'simulated'")
+    if "simulation_batch_id" not in existing_cols:
+        cursor.execute("ALTER TABLE energy_readings ADD COLUMN simulation_batch_id TEXT")
+    if "validation_status" not in existing_cols:
+        cursor.execute("ALTER TABLE energy_readings ADD COLUMN validation_status TEXT DEFAULT 'valid'")
+
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_readings_time ON energy_readings(timestamp);")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_readings_device ON energy_readings(device_id);")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_readings_dev_time ON energy_readings(device_id, timestamp);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_readings_source ON energy_readings(data_source);")
 
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS gsheet_config (
@@ -90,12 +104,19 @@ def init_db():
             ("circuit_lighting", "วงจรแสงสว่าง (Lighting)", "main_panel", 800.0, 0, "lighting"),
             ("circuit_receptacle", "วงจรเต้ารับ (Receptacle)", "main_panel", 2000.0, 0, "receptacle"),
             ("circuit_heavy_load", "โหลดหนัก (Heavy Load)", "main_panel", 5000.0, 0, "heavy_load"),
+            ("circuit_ev", "เครื่องชาร์จ EV (EV Charger)", "main_panel", 7400.0, 0, "ev"),
             ("circuit_solar", "Solar PV (On-Grid)", "main_panel", 5000.0, 0, "solar"),
         ]
         cursor.executemany("""
             INSERT INTO devices (device_id, name, room_id, rated_power, status, category)
             VALUES (?, ?, ?, ?, ?, ?)
         """, default_devices)
+    else:
+        # Ensure circuit_ev exists
+        cursor.execute("""
+            INSERT OR IGNORE INTO devices (device_id, name, room_id, rated_power, status, category)
+            VALUES ('circuit_ev', 'เครื่องชาร์จ EV (EV Charger)', 'main_panel', 7400.0, 0, 'ev')
+        """)
 
     # Sanitize any legacy negative ratings or readings
     cursor.execute("UPDATE devices SET rated_power = 5000.0 WHERE device_id = 'circuit_solar' AND rated_power < 0;")
