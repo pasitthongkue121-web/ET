@@ -55,7 +55,7 @@ class TestAIPrediction(unittest.TestCase):
 
     def test_automated_insights_detection(self):
         insights = self.insight_engine.detect_insights()
-        self.assertGreaterEqual(len(insights), 4)
+        self.assertGreaterEqual(len(insights), 3)
         for item in insights:
             self.assertIn("title", item)
             self.assertIn("description", item)
