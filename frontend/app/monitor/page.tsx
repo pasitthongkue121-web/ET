@@ -5,7 +5,7 @@ import AppShell from '../../components/AppShell';
 import PowerChart from '../../components/PowerChart';
 import { getEnergyHistory, getDevices, checkBackendHealth } from '../../lib/api';
 import { EnergyHistoryResponse, Device } from '../../lib/types';
-import { Zap, Activity, Gauge, BatteryCharging, DollarSign, Filter, RefreshCw, Layers } from '../../components/Icons';
+import { Zap, Activity, Gauge, BatteryCharging, DollarSign, Filter, RefreshCw, Layers, Download } from '../../components/Icons';
 
 export default function EnergyMonitorPage() {
   const [period, setPeriod] = useState<'today' | '7d' | '30d'>('today');
@@ -41,6 +41,15 @@ export default function EnergyMonitorPage() {
 
   const timeseries = history?.timeseries || [];
   const latestPoint = timeseries.length > 0 ? timeseries[timeseries.length - 1] : null;
+
+  const handleExportCSV = () => {
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://energy-twins-ai.onrender.com';
+    const params = new URLSearchParams();
+    if (selectedDevice) params.append('device_id', selectedDevice);
+    params.append('data_source', 'all');
+    const url = `${apiUrl}/api/analytics/export/csv?${params.toString()}`;
+    window.open(url, '_blank');
+  };
 
   return (
     <AppShell isBackendOnline={isBackendOnline} onRefresh={loadData} isLoading={isLoading}>
@@ -82,6 +91,16 @@ export default function EnergyMonitorPage() {
             >
               <RefreshCw className={`h-3.5 w-3.5 ${isLoading ? 'animate-spin' : ''}`} />
               Refresh
+            </button>
+
+            {/* Export CSV */}
+            <button
+              onClick={handleExportCSV}
+              className="flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3.5 py-2 text-xs font-semibold text-emerald-300 shadow-sm transition hover:bg-emerald-500/20 hover:text-emerald-200"
+              title="ส่งออกรายงานการใช้ไฟฟ้าและค่าไฟเป็น CSV"
+            >
+              <Download className="h-3.5 w-3.5" />
+              Export CSV
             </button>
           </div>
         </div>
