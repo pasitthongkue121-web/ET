@@ -116,17 +116,29 @@ class SQLiteEnergyRepository(BaseEnergyRepository):
         conn.commit()
         conn.close()
 
-    def insert_reading(self, reading: Dict[str, Any]) -> int:
+    def insert_reading(self, reading: Any) -> int:
+        if hasattr(reading, "model_dump"):
+            reading = reading.model_dump()
+        elif hasattr(reading, "dict"):
+            reading = reading.dict()
+        elif not isinstance(reading, dict):
+            reading = dict(reading)
+
         conn = get_connection()
         cursor = conn.cursor()
         cursor.execute("""
             INSERT OR IGNORE INTO devices (device_id, name, room_id, rated_power, status, category)
-            VALUES (?, ?, 'living_room', 1200.0, 1, 'appliance')
+            VALUES (?, ?, 'main_panel', 1200.0, 1, 'appliance')
         """, (reading["device_id"], reading["device_id"].replace("_", " ").title()))
+        
+        data_source = reading.get("data_source", "simulated")
+        sim_batch_id = reading.get("simulation_batch_id")
+        val_status = reading.get("validation_status", "valid")
+
         cursor.execute("""
             INSERT INTO energy_readings 
-            (timestamp, device_id, voltage, current, power, energy, temperature, humidity, occupancy)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            (timestamp, device_id, voltage, current, power, energy, temperature, humidity, occupancy, data_source, simulation_batch_id, validation_status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             reading["timestamp"],
             reading["device_id"],
@@ -136,7 +148,10 @@ class SQLiteEnergyRepository(BaseEnergyRepository):
             reading.get("energy", 0.0),
             reading.get("temperature", 25.0),
             reading.get("humidity", 60.0),
-            1 if reading.get("occupancy", True) else 0
+            1 if reading.get("occupancy", True) else 0,
+            data_source,
+            sim_batch_id,
+            val_status
         ))
         row_id = cursor.lastrowid
         # Update device status based on power reading (> 5W considered active)
@@ -149,14 +164,34 @@ class SQLiteEnergyRepository(BaseEnergyRepository):
         conn.close()
         return row_id
 
-    def insert_readings_bulk(self, readings: List[Dict[str, Any]]) -> int:
+    def insert_readings_bulk(self, readings: List[Any]) -> int:
         conn = get_connection()
         cursor = conn.cursor()
+        sanitized = []
+        for r in readings:
+            if hasattr(r, "model_dump"):
+                r_copy = r.model_dump()
+            elif hasattr(r, "dict"):
+                r_copy = r.dict()
+            else:
+                r_copy = dict(r)
+            r_copy.setdefault("voltage", 230.0)
+            r_copy.setdefault("current", 0.0)
+            r_copy.setdefault("power", 0.0)
+            r_copy.setdefault("energy", 0.0)
+            r_copy.setdefault("temperature", 25.0)
+            r_copy.setdefault("humidity", 60.0)
+            r_copy["occupancy"] = 1 if r_copy.get("occupancy", True) else 0
+            r_copy.setdefault("data_source", "simulated")
+            r_copy.setdefault("simulation_batch_id", None)
+            r_copy.setdefault("validation_status", "valid")
+            sanitized.append(r_copy)
+
         cursor.executemany("""
             INSERT INTO energy_readings 
-            (timestamp, device_id, voltage, current, power, energy, temperature, humidity, occupancy)
-            VALUES (:timestamp, :device_id, :voltage, :current, :power, :energy, :temperature, :humidity, :occupancy)
-        """, readings)
+            (timestamp, device_id, voltage, current, power, energy, temperature, humidity, occupancy, data_source, simulation_batch_id, validation_status)
+            VALUES (:timestamp, :device_id, :voltage, :current, :power, :energy, :temperature, :humidity, :occupancy, :data_source, :simulation_batch_id, :validation_status)
+        """, sanitized)
         conn.commit()
         count = cursor.rowcount
         conn.close()
