@@ -324,9 +324,10 @@ export default function PipelinePage() {
         batch_id: previewData?.batch_id,
       });
       setTransmitResult(res);
+      const gsheetNotice = res.gsheet_pushed ? ` และส่งเข้า Google Sheet เรียบร้อยแล้ว (${res.gsheet_rows_pushed} แถว)` : '';
       setActionMessage({
         type: 'success',
-        text: `ส่งข้อมูลผ่าน Pipeline สำเร็จ! บันทึกเข้า Database ${res.records_transmitted} รายการ (Batch ID: ${res.batch_id}) ในเวลา ${res.elapsed_seconds} วินาที`,
+        text: `ส่งข้อมูลผ่าน Pipeline สำเร็จ! บันทึกเข้า Database ${res.records_transmitted} รายการ${gsheetNotice} (Batch ID: ${res.batch_id}) ในเวลา ${res.elapsed_seconds} วินาที`,
       });
       await refreshData();
     } catch (err: any) {
