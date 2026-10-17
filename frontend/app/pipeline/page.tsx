@@ -14,6 +14,11 @@ import {
   ESP32SimStatus,
   PipelinePreviewResponse,
   PipelineTransmitResponse,
+  getGSheetStatus,
+  connectGoogleSheet,
+  disconnectGSheet,
+  syncGSheet,
+  GSheetStatus,
 } from '../../lib/api';
 import {
   Zap, Activity, Cpu, Layers, RefreshCw, CheckCircle, AlertCircle,
@@ -90,8 +95,16 @@ export default function PipelinePage() {
   const [health, setHealth] = useState<PipelineHealthResponse | null>(null);
   const [simStatus, setSimStatus] = useState<ESP32SimStatus | null>(null);
 
-  // Tabs: 'batch_sim' (Primary simulation hub), 'live_stream', 'firmware'
-  const [activeTab, setActiveTab] = useState<'batch_sim' | 'live_stream' | 'firmware'>('batch_sim');
+  // Tabs: 'batch_sim' (Primary simulation hub), 'live_stream', 'firmware', 'gsheet'
+  const [activeTab, setActiveTab] = useState<'batch_sim' | 'live_stream' | 'firmware' | 'gsheet'>('gsheet');
+
+  // Google Sheet states
+  const [gsheetStatus, setGSheetStatus] = useState<GSheetStatus | null>(null);
+  const [webAppUrlInput, setWebAppUrlInput] = useState<string>('');
+  const [isConnectingSheet, setIsConnectingSheet] = useState<boolean>(false);
+  const [isSyncingSheet, setIsSyncingSheet] = useState<boolean>(false);
+  const [isSendingSheetTest, setIsSendingSheetTest] = useState<boolean>(false);
+  const [formulaCopied, setFormulaCopied] = useState<boolean>(false);
 
   // Simulation Hub Parameters
   const [period, setPeriod] = useState<'daily' | 'weekly' | 'monthly' | 'custom'>('daily');
@@ -132,14 +145,21 @@ export default function PipelinePage() {
 
   const refreshData = useCallback(async () => {
     try {
-      const [h, s] = await Promise.all([
+      const [h, s, g] = await Promise.all([
         getPipelineHealth().catch(() => null),
         getESP32SimStatus().catch(() => null),
+        getGSheetStatus().catch(() => null),
       ]);
       setHealth(h);
       setSimStatus(s);
+      if (g) {
+        setGSheetStatus(g);
+        if (g.web_app_url && !webAppUrlInput) {
+          setWebAppUrlInput(g.web_app_url);
+        }
+      }
     } catch {}
-  }, []);
+  }, [webAppUrlInput]);
 
   useEffect(() => {
     refreshData();
@@ -151,6 +171,97 @@ export default function PipelinePage() {
     setSelectedCircuits(prev =>
       prev.includes(cid) ? prev.filter(x => x !== cid) : [...prev, cid]
     );
+  };
+
+  const handleConnectSheet = async () => {
+    if (!webAppUrlInput.trim()) {
+      setActionMessage({ type: 'error', text: 'กรุณากรอก Google Apps Script Web App URL' });
+      return;
+    }
+    setIsConnectingSheet(true);
+    setActionMessage(null);
+    try {
+      const res = await connectGoogleSheet(webAppUrlInput.trim());
+      setActionMessage({
+        type: 'success',
+        text: `เชื่อมต่อ Google Sheet สำเร็จ! ${res.message || ''}`,
+      });
+      await refreshData();
+    } catch (err: any) {
+      setActionMessage({ type: 'error', text: err.message || 'เชื่อมต่อ Google Sheet ล้มเหลว' });
+    } finally {
+      setIsConnectingSheet(false);
+    }
+  };
+
+  const handleDisconnectSheet = async () => {
+    setIsConnectingSheet(true);
+    setActionMessage(null);
+    try {
+      await disconnectGSheet();
+      setWebAppUrlInput('');
+      setActionMessage({ type: 'success', text: 'ตัดการเชื่อมต่อ Google Sheet เรียบร้อยแล้ว' });
+      await refreshData();
+    } catch (err: any) {
+      setActionMessage({ type: 'error', text: err.message || 'ตัดการเชื่อมต่อล้มเหลว' });
+    } finally {
+      setIsConnectingSheet(false);
+    }
+  };
+
+  const handleSyncSheet = async () => {
+    setIsSyncingSheet(true);
+    setActionMessage(null);
+    try {
+      const res = await syncGSheet();
+      setActionMessage({
+        type: 'success',
+        text: `ดึงข้อมูลจาก Google Sheet สำเร็จ! อ่านได้ ${res.row_count || 0} แถว (นำเข้าเพิ่ม ${res.new_rows_inserted || 0} รายการ)`,
+      });
+      await refreshData();
+    } catch (err: any) {
+      setActionMessage({ type: 'error', text: err.message || 'ซิงค์ข้อมูลล้มเหลว' });
+    } finally {
+      setIsSyncingSheet(false);
+    }
+  };
+
+  const handleSendTestToSheet = async () => {
+    const targetUrl = webAppUrlInput || gsheetStatus?.web_app_url;
+    if (!targetUrl) {
+      setActionMessage({ type: 'error', text: 'ยังไม่ได้ระบุ Google Apps Script Web App URL' });
+      return;
+    }
+    setIsSendingSheetTest(true);
+    setActionMessage(null);
+    try {
+      const nowStr = new Date().toISOString().replace('T', ' ').slice(0, 19);
+      const testPayload = [{
+        timestamp: nowStr,
+        device_id: 'circuit_lighting',
+        power_w: 450.0,
+        energy_kwh: 0.12,
+        voltage: 229.5,
+        current: 1.96,
+        temperature: 28.0,
+        humidity: 65.0,
+        occupancy: 1,
+      }];
+      await fetch(targetUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(testPayload),
+        mode: 'no-cors',
+      });
+      setActionMessage({
+        type: 'success',
+        text: 'ส่งแพ็กเกจข้อมูลทดสอบไปยัง Google Sheet สำเร็จแล้ว! กรุณาเปิดดูแผ่นงาน Google Sheet ของคุณ',
+      });
+    } catch (err: any) {
+      setActionMessage({ type: 'error', text: err.message || 'ส่งข้อมูลทดสอบไม่สำเร็จ' });
+    } finally {
+      setIsSendingSheetTest(false);
+    }
   };
 
   const selectAllCircuits = () => {
@@ -400,7 +511,7 @@ export default function PipelinePage() {
         {/* ------------------------------------------------------------- */}
         {/* TABS CONTROLS                                                 */}
         {/* ------------------------------------------------------------- */}
-        <div className="flex gap-2 border-b border-slate-800 pb-2">
+        <div className="flex flex-wrap gap-2 border-b border-slate-800 pb-2">
           <button
             onClick={() => setActiveTab('batch_sim')}
             className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
@@ -411,6 +522,17 @@ export default function PipelinePage() {
           >
             <BarChart3 className="h-4 w-4" />
             Pipeline Simulation Hub (Batch & Historical)
+          </button>
+          <button
+            onClick={() => setActiveTab('gsheet')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
+              activeTab === 'gsheet'
+                ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/30'
+                : 'text-slate-400 hover:text-white hover:bg-slate-900'
+            }`}
+          >
+            <Layers className="h-4 w-4" />
+            Google Sheets Integration (Web App & Formula)
           </button>
           <button
             onClick={() => setActiveTab('live_stream')}
@@ -936,6 +1058,238 @@ void sendTelemetry(float power_w, float energy_kwh) {
   http.end();
 }`}
             />
+          </div>
+        )}
+        {/* ------------------------------------------------------------- */}
+        {/* TAB 4: GOOGLE SHEETS LIVE INTEGRATION                         */}
+        {/* ------------------------------------------------------------- */}
+        {activeTab === 'gsheet' && (
+          <div className="space-y-6">
+            {/* Quick Method 1: Formula Import */}
+            <div className="rounded-2xl border border-emerald-500/30 bg-gradient-to-r from-emerald-950/40 via-slate-900/60 to-slate-900/80 p-6 backdrop-blur space-y-4">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                      วิธีที่ 1: แนะนำ (ไม่ต้องเขียนโค้ด)
+                    </span>
+                    <h3 className="text-lg font-bold text-white">แสดงข้อมูลใน Google Sheet ทันทีผ่านสูตร =IMPORTDATA</h3>
+                  </div>
+                  <p className="text-xs text-slate-300 mt-1">
+                    เพียงเปิด Google Sheets ว่างๆ ขึ้นมา 1 แผ่น แล้ววางสูตรนี้ลงในเซลล์ <code className="bg-slate-800 px-1 py-0.5 rounded text-emerald-300 font-bold">A1</code> ข้อมูลทั้ง 12 คอลัมน์ (Timestamp, วงจรไฟฟ้า, กำลังวัตต์, kWh, อัตรา TOU, ค่าไฟบาท) จะแสดงผลและอัปเดตอัตโนมัติทันที
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText('=IMPORTDATA("https://energy-twins-ai.onrender.com/api/analytics/export/csv")');
+                    setFormulaCopied(true);
+                    setTimeout(() => setFormulaCopied(false), 2500);
+                  }}
+                  className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-lg shadow-emerald-600/30 transition flex-shrink-0"
+                >
+                  {formulaCopied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                  {formulaCopied ? 'คัดลอกสูตรแล้ว!' : 'คัดลอกสูตร Google Sheet'}
+                </button>
+              </div>
+
+              <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 font-mono text-xs text-emerald-400 break-all select-all flex items-center justify-between">
+                <span>=IMPORTDATA(&quot;https://energy-twins-ai.onrender.com/api/analytics/export/csv&quot;)</span>
+                <span className="text-[11px] text-slate-500 font-sans hidden sm:inline">กดปุ่มสีเขียวเพื่อคัดลอก</span>
+              </div>
+            </div>
+
+            {/* Method 2: Google Apps Script Web App Connection */}
+            <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 space-y-6">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
+                      วิธีที่ 2: ระบบ 2-Way IoT Telemetry Hub
+                    </span>
+                    <h3 className="text-lg font-bold text-white">เชื่อมต่อ Google Apps Script Web App</h3>
+                  </div>
+                  <p className="text-xs text-slate-400 mt-1">
+                    เชื่อมต่อ Google Sheet ของคุณด้วย Web App URL เพื่อส่งข้อมูลการใช้ไฟฟ้าจาก ESP32 และ Pipeline Simulation ไปเพิ่มเป็นแถวใน Google Sheet แบบ Real-time
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {gsheetStatus?.connected ? (
+                    <span className="flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-bold text-emerald-400 border border-emerald-500/20">
+                      <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+                      CONNECTED
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-1.5 rounded-full bg-slate-800 px-3 py-1 text-xs font-bold text-slate-400 border border-slate-700">
+                      <span className="h-2 w-2 rounded-full bg-slate-500" />
+                      NOT CONNECTED
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* URL Input Box */}
+              <div className="space-y-2">
+                <label className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center justify-between">
+                  <span>Google Apps Script Web App URL</span>
+                  {gsheetStatus?.connected && (
+                    <span className="text-[11px] text-emerald-400 lowercase font-mono">
+                      (กำลังเชื่อมต่ออยู่)
+                    </span>
+                  )}
+                </label>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <input
+                    type="url"
+                    value={webAppUrlInput}
+                    onChange={(e) => setWebAppUrlInput(e.target.value)}
+                    placeholder="https://script.google.com/macros/s/.../exec"
+                    className="flex-1 rounded-xl border border-slate-700 bg-slate-950 px-4 py-2.5 text-xs font-mono text-white placeholder-slate-500 focus:border-cyan-500 focus:outline-none"
+                  />
+                  <button
+                    onClick={handleConnectSheet}
+                    disabled={isConnectingSheet}
+                    className="px-5 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-white text-xs font-bold transition flex items-center justify-center gap-2 flex-shrink-0"
+                  >
+                    {isConnectingSheet ? <RefreshCw className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
+                    Connect & Save URL
+                  </button>
+                  {gsheetStatus?.connected && (
+                    <button
+                      onClick={handleDisconnectSheet}
+                      disabled={isConnectingSheet}
+                      className="px-4 py-2.5 rounded-xl border border-rose-500/30 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 text-xs font-bold transition flex-shrink-0"
+                    >
+                      Disconnect
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Status Details & Actions */}
+              {gsheetStatus?.connected && (
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 p-4 rounded-xl border border-slate-800 bg-slate-950/60 text-xs">
+                  <div>
+                    <span className="text-slate-500 block mb-1">สถานะการเชื่อมต่อ:</span>
+                    <span className="font-semibold text-emerald-400">พร้อมรับส่งข้อมูล (Online)</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 block mb-1">ซิงค์ล่าสุดเมื่อ:</span>
+                    <span className="font-mono text-slate-300">{gsheetStatus.last_sync_at ? new Date(gsheetStatus.last_sync_at).toLocaleString('th-TH') : 'ยังไม่มีการซิงค์'}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 block mb-1">การทดสอบส่งข้อมูล:</span>
+                    <button
+                      onClick={handleSendTestToSheet}
+                      disabled={isSendingSheetTest}
+                      className="text-cyan-400 hover:text-cyan-300 font-bold underline flex items-center gap-1"
+                    >
+                      {isSendingSheetTest ? 'กำลังส่งข้อมูล...' : '➔ คลิกเพื่อส่งแถวทดสอบเข้า Google Sheet ทันที'}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Apps Script Code Instructions */}
+              <div className="space-y-3 pt-4 border-t border-slate-800">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-300">
+                    Google Apps Script Code Template
+                  </h4>
+                  <span className="text-xs text-slate-400">นำโค้ดนี้ไปวางใน Extensions ➔ Apps Script</span>
+                </div>
+
+                <CodeBlock
+                  language="javascript (Google Apps Script)"
+                  code={`// ====================================================================
+// ENERGY TWINS AI - Google Sheets 2-Way IoT Telemetry Hub
+// ====================================================================
+var SHEET_HEADERS = [
+  "timestamp", "device_id", "power_w", "energy_kwh",
+  "voltage", "current", "temperature", "humidity", "occupancy"
+];
+
+function doPost(e) {
+  try {
+    var sheet = getOrCreateSheet();
+    var data = JSON.parse(e.postData.contents);
+    var rows = Array.isArray(data) ? data : [data];
+    var nowStr = Utilities.formatDate(new Date(), "Asia/Bangkok", "yyyy-MM-dd HH:mm:ss");
+
+    for (var i = 0; i < rows.length; i++) {
+      var item = rows[i];
+      var row = [
+        item.timestamp || nowStr,
+        item.device_id || "esp32_sensor",
+        Number(item.power_w || item.power || 0),
+        Number(item.energy_kwh || item.energy || 0),
+        Number(item.voltage || 230),
+        Number(item.current || 0),
+        Number(item.temperature || 25),
+        Number(item.humidity || 60),
+        Number(item.occupancy || 1)
+      ];
+      sheet.appendRow(row);
+    }
+
+    if (sheet.getLastRow() > 5100) {
+      sheet.deleteRows(2, sheet.getLastRow() - 5000);
+    }
+
+    return ContentService.createTextOutput(JSON.stringify({ status: "success", appended: rows.length }))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: err.toString() }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+function doGet(e) {
+  try {
+    var sheet = getOrCreateSheet();
+    var lastRow = sheet.getLastRow();
+    var lastCol = sheet.getLastColumn();
+    if (lastRow < 2) return ContentService.createTextOutput(JSON.stringify({ data: [] })).setMimeType(ContentService.MimeType.JSON);
+
+    var limit = (e && e.parameter && e.parameter.limit) ? parseInt(e.parameter.limit, 10) : 50;
+    var startRow = Math.max(2, lastRow - limit + 1);
+    var numRows = lastRow - startRow + 1;
+
+    var headerRange = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+    var dataRange = sheet.getRange(startRow, 1, numRows, lastCol).getValues();
+    var rows = [];
+
+    for (var i = 0; i < dataRange.length; i++) {
+      var row = {};
+      for (var j = 0; j < headerRange.length; j++) {
+        row[headerRange[j]] = dataRange[i][j];
+      }
+      rows.push(row);
+    }
+    return ContentService.createTextOutput(JSON.stringify({ data: rows, total_rows: lastRow - 1 }))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: err.toString() }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+function getOrCreateSheet() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getActiveSheet();
+  if (sheet.getLastRow() === 0) {
+    sheet.appendRow(SHEET_HEADERS);
+    var hRange = sheet.getRange(1, 1, 1, SHEET_HEADERS.length);
+    hRange.setBackground("#0f172a");
+    hRange.setFontColor("#38bdf8");
+    hRange.setFontWeight("bold");
+    sheet.setFrozenRows(1);
+  }
+  return sheet;
+}`}
+                />
+              </div>
+            </div>
           </div>
         )}
       </div>
