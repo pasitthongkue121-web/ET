@@ -275,7 +275,37 @@ def sim_send_test(req: SimTestPacketRequest):
     if req.voltage:
         reading["voltage"] = req.voltage
         reading["current"] = round(reading["power_w"] / req.voltage, 2)
-    return esp32_simulator.send_packet(reading)
+    res = esp32_simulator.send_packet(reading)
+
+    sheet_url = get_sheet_url()
+    if sheet_url:
+        try:
+            import urllib.request
+            import json
+            sheet_row = [{
+                "timestamp": reading.get("timestamp"),
+                "device_id": reading.get("device_id"),
+                "power_w": reading.get("power_w", 0),
+                "energy_kwh": reading.get("energy", 0),
+                "voltage": reading.get("voltage", 230.0),
+                "current": reading.get("current", 0.0),
+                "temperature": reading.get("temperature", 28.0),
+                "humidity": reading.get("humidity", 60.0),
+                "occupancy": reading.get("occupancy", 1),
+            }]
+            payload = json.dumps(sheet_row).encode("utf-8")
+            req_sheet = urllib.request.Request(
+                sheet_url,
+                data=payload,
+                headers={"Content-Type": "application/json"}
+            )
+            urllib.request.urlopen(req_sheet, timeout=10)
+            res["gsheet_pushed"] = True
+        except Exception as e:
+            res["gsheet_pushed"] = False
+            res["gsheet_error"] = str(e)
+
+    return res
 
 
 @router.get("/simulation/circuits")
@@ -392,6 +422,39 @@ def transmit_simulation_data(req: PipelineSimTransmitRequest):
     )
 
     result = esp32_simulator.transmit_batch(readings)
+
+    # Automatically push to Google Sheet Web App if connected!
+    sheet_url = get_sheet_url()
+    if sheet_url and readings:
+        try:
+            import urllib.request
+            import json
+            sheet_rows = []
+            for r in readings[:300]:
+                sheet_rows.append({
+                    "timestamp": r.get("timestamp"),
+                    "device_id": r.get("device_id"),
+                    "power_w": r.get("power", r.get("power_w", 0)),
+                    "energy_kwh": r.get("energy", r.get("energy_kwh", 0)),
+                    "voltage": r.get("voltage", 230.0),
+                    "current": r.get("current", 0.0),
+                    "temperature": r.get("temperature", 28.0),
+                    "humidity": r.get("humidity", 60.0),
+                    "occupancy": r.get("occupancy", 1),
+                })
+            payload = json.dumps(sheet_rows).encode("utf-8")
+            req_sheet = urllib.request.Request(
+                sheet_url,
+                data=payload,
+                headers={"Content-Type": "application/json"}
+            )
+            urllib.request.urlopen(req_sheet, timeout=15)
+            result["gsheet_pushed"] = True
+            result["gsheet_rows_pushed"] = len(sheet_rows)
+        except Exception as e:
+            result["gsheet_pushed"] = False
+            result["gsheet_error"] = str(e)
+
     return result
 
 
