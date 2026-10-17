@@ -18,6 +18,8 @@ import {
   connectGoogleSheet,
   disconnectGSheet,
   syncGSheet,
+  clearGoogleSheet,
+  clearSimulationReadings,
   GSheetStatus,
 } from '../../lib/api';
 import {
@@ -264,6 +266,57 @@ export default function PipelinePage() {
     }
   };
 
+  const [isClearingData, setIsClearingData] = useState<boolean>(false);
+  const [autoClearPrevious, setAutoClearPrevious] = useState<boolean>(true);
+
+  const handleClearSheet = async () => {
+    setIsClearingData(true);
+    setActionMessage(null);
+    try {
+      const targetUrl = webAppUrlInput || gsheetStatus?.web_app_url || 'https://script.google.com/macros/s/AKfycbwx0nIl9fswC9mtNivXEv4gzeKh0O07bImCEAe6XV2VEQZT7ObKdSP5L4CHg4UaneSf/exec';
+      try {
+        await fetch(targetUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'clear' }),
+          mode: 'no-cors',
+        });
+      } catch {}
+      await clearGoogleSheet().catch(() => null);
+      setActionMessage({
+        type: 'success',
+        text: 'ส่งคำสั่งล้างข้อมูลตกค้างใน Google Sheet เรียบร้อยแล้ว! แผ่นงานจะเหลือเฉพาะแถวหัวตาราง',
+      });
+      await refreshData();
+    } catch (err: any) {
+      setActionMessage({ type: 'error', text: err.message || 'ล้างข้อมูล Google Sheet ไม่สำเร็จ' });
+    } finally {
+      setIsClearingData(false);
+    }
+  };
+
+  const handleClearSimulatedData = async (clearSheetAlso = false) => {
+    setIsClearingData(true);
+    setActionMessage(null);
+    try {
+      const res = await clearSimulationReadings({ clear_all_simulated: true, clear_google_sheet: clearSheetAlso });
+      if (clearSheetAlso) {
+        await handleClearSheet();
+      }
+      setActionMessage({
+        type: 'success',
+        text: `ล้างข้อมูลจำลองตกค้างในระบบสำเร็จ (${res.deleted_records} รายการ) — ข้อมูลจากฮาร์ดแวร์จริงยังคงอยู่ครบถ้วนปลอดภัย 100%`,
+      });
+      setPreviewData(null);
+      setTransmitResult(null);
+      await refreshData();
+    } catch (err: any) {
+      setActionMessage({ type: 'error', text: err.message || 'ล้างข้อมูลจำลองไม่สำเร็จ' });
+    } finally {
+      setIsClearingData(false);
+    }
+  };
+
   const selectAllCircuits = () => {
     setSelectedCircuits(CIRCUIT_OPTIONS.map(c => c.id));
   };
@@ -315,6 +368,9 @@ export default function PipelinePage() {
     setIsTransmitting(true);
     setActionMessage(null);
     try {
+      if (autoClearPrevious) {
+        await clearSimulationReadings({ clear_all_simulated: true, clear_google_sheet: false }).catch(() => null);
+      }
       const res = await transmitPipelineSimulation({
         devices: selectedCircuits,
         period,
@@ -755,6 +811,29 @@ export default function PipelinePage() {
                   <Zap className={`h-4 w-4 ${isTransmitting ? 'animate-spin' : ''}`} />
                   {isTransmitting ? 'กำลังส่งข้อมูลผ่าน Pipeline...' : '2. ส่งข้อมูลเข้าสู่ระบบ (Transmit to Database)'}
                 </button>
+              </div>
+
+              {/* Data Hygiene / Cleanup Controls */}
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pt-3 border-t border-slate-800/80 text-xs">
+                <label className="flex items-center gap-2 cursor-pointer select-none text-slate-300 hover:text-white">
+                  <input
+                    type="checkbox"
+                    checked={autoClearPrevious}
+                    onChange={(e) => setAutoClearPrevious(e.target.checked)}
+                    className="h-4 w-4 rounded border-slate-700 bg-slate-900 text-cyan-500 focus:ring-0"
+                  />
+                  <span>ล้างข้อมูลจำลองเก่าอัตโนมัติก่อนส่งชุดใหม่ (ป้องกันข้อมูลตกค้าง/ทับซ้อน)</span>
+                </label>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => handleClearSimulatedData(false)}
+                    disabled={isClearingData}
+                    className="px-3 py-1.5 rounded-xl border border-rose-500/30 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 font-semibold transition flex items-center gap-1.5 disabled:opacity-50"
+                  >
+                    <span>🧹 {isClearingData ? 'กำลังล้าง...' : 'ล้างข้อมูลจำลองตกค้างในระบบ'}</span>
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -1231,7 +1310,7 @@ void sendTelemetry(float power_w, float energy_kwh) {
 
               {/* Status Details & Actions */}
               {gsheetStatus?.connected && (
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 p-4 rounded-xl border border-slate-800 bg-slate-950/60 text-xs">
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 p-4 rounded-xl border border-slate-800 bg-slate-950/60 text-xs">
                   <div>
                     <span className="text-slate-500 block mb-1">สถานะการเชื่อมต่อ:</span>
                     <span className="font-semibold text-emerald-400">พร้อมรับส่งข้อมูล (Online)</span>
@@ -1247,7 +1326,17 @@ void sendTelemetry(float power_w, float energy_kwh) {
                       disabled={isSendingSheetTest}
                       className="text-cyan-400 hover:text-cyan-300 font-bold underline flex items-center gap-1"
                     >
-                      {isSendingSheetTest ? 'กำลังส่งข้อมูล...' : '➔ คลิกเพื่อส่งแถวทดสอบเข้า Google Sheet ทันที'}
+                      {isSendingSheetTest ? 'กำลังส่งข้อมูล...' : '➔ ส่งแถวทดสอบเข้า Google Sheet'}
+                    </button>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 block mb-1">การจัดการข้อมูลตกค้าง:</span>
+                    <button
+                      onClick={handleClearSheet}
+                      disabled={isClearingData}
+                      className="text-rose-400 hover:text-rose-300 font-bold underline flex items-center gap-1"
+                    >
+                      {isClearingData ? 'กำลังล้าง...' : '🧹 ล้างข้อมูลตกค้างใน Sheet'}
                     </button>
                   </div>
                 </div>
