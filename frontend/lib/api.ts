@@ -389,6 +389,28 @@ export async function getGSheetAppsScriptTemplate(): Promise<{ language: string;
   return await res.json();
 }
 
+export async function clearGoogleSheet(): Promise<{ status: string; message: string }> {
+  const res = await fetchWithTimeout(`${API_BASE_URL}/api/gsheet/clear-sheet`, {
+    method: 'POST',
+  }, 15000);
+  if (!res.ok) throw new Error(`Failed to clear sheet: ${res.status}`);
+  return await res.json();
+}
+
+export async function clearSimulationReadings(options?: {
+  batch_id?: string;
+  clear_all_simulated?: boolean;
+  clear_google_sheet?: boolean;
+}): Promise<{ status: string; message: string; deleted_records: number; google_sheet_cleared: boolean; real_data_preserved: boolean }> {
+  const res = await fetchWithTimeout(`${API_BASE_URL}/api/gsheet/simulation/clear`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(options || { clear_all_simulated: true, clear_google_sheet: false }),
+  }, 15000);
+  if (!res.ok) throw new Error(`Failed to clear simulation: ${res.status}`);
+  return await res.json();
+}
+
 // --- 5-Stage Pipeline & ESP32 Simulator API ---
 
 export interface PipelineStageHealth {
