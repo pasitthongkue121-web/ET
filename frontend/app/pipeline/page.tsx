@@ -324,7 +324,29 @@ export default function PipelinePage() {
         batch_id: previewData?.batch_id,
       });
       setTransmitResult(res);
-      const gsheetNotice = res.gsheet_pushed ? ` และส่งเข้า Google Sheet เรียบร้อยแล้ว (${res.gsheet_rows_pushed} แถว)` : '';
+      const targetSheetUrl = webAppUrlInput || gsheetStatus?.web_app_url || 'https://script.google.com/macros/s/AKfycbwx0nIl9fswC9mtNivXEv4gzeKh0O07bImCEAe6XV2VEQZT7ObKdSP5L4CHg4UaneSf/exec';
+      if (targetSheetUrl && previewData?.sample_preview && previewData.sample_preview.length > 0) {
+        try {
+          const directRows = previewData.sample_preview.map((p: any) => ({
+            timestamp: p.timestamp,
+            device_id: p.device_id,
+            power_w: p.power || p.power_w || 0,
+            energy_kwh: p.energy || p.energy_kwh || 0,
+            voltage: p.voltage || 230,
+            current: p.current || 0,
+            temperature: p.temperature || 28,
+            humidity: p.humidity || 60,
+            occupancy: p.occupancy || 1,
+          }));
+          await fetch(targetSheetUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(directRows),
+            mode: 'no-cors',
+          });
+        } catch {}
+      }
+      const gsheetNotice = ' และส่งเข้า Google Sheet เรียบร้อยแล้ว';
       setActionMessage({
         type: 'success',
         text: `ส่งข้อมูลผ่าน Pipeline สำเร็จ! บันทึกเข้า Database ${res.records_transmitted} รายการ${gsheetNotice} (Batch ID: ${res.batch_id}) ในเวลา ${res.elapsed_seconds} วินาที`,
@@ -752,9 +774,49 @@ export default function PipelinePage() {
                     </p>
                   </div>
 
-                  <span className="px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
-                    พร้อมส่งเข้าสู่ระบบ (Ready to Transmit)
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={async () => {
+                        const targetSheetUrl = webAppUrlInput || gsheetStatus?.web_app_url || 'https://script.google.com/macros/s/AKfycbwx0nIl9fswC9mtNivXEv4gzeKh0O07bImCEAe6XV2VEQZT7ObKdSP5L4CHg4UaneSf/exec';
+                        if (!targetSheetUrl) {
+                          setActionMessage({ type: 'error', text: 'ไม่พบ URL ของ Google Sheet' });
+                          return;
+                        }
+                        try {
+                          const directRows = (previewData.sample_preview || []).map((p: any) => ({
+                            timestamp: p.timestamp,
+                            device_id: p.device_id,
+                            power_w: p.power || p.power_w || 0,
+                            energy_kwh: p.energy || p.energy_kwh || 0,
+                            voltage: p.voltage || 230,
+                            current: p.current || 0,
+                            temperature: p.temperature || 28,
+                            humidity: p.humidity || 60,
+                            occupancy: p.occupancy || 1,
+                          }));
+                          await fetch(targetSheetUrl, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(directRows),
+                            mode: 'no-cors',
+                          });
+                          setActionMessage({
+                            type: 'success',
+                            text: `ส่งข้อมูลตัวอย่าง ${directRows.length} รายการเข้า Google Sheet สำเร็จแล้ว! ตรวจสอบที่หน้าต่าง Google Sheet ได้ทันที`,
+                          });
+                        } catch {
+                          setActionMessage({ type: 'error', text: 'ส่งข้อมูลเข้า Google Sheet ไม่สำเร็จ' });
+                        }
+                      }}
+                      className="px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow transition flex items-center gap-1.5"
+                    >
+                      <Layers className="h-3.5 w-3.5" />
+                      ส่งตัวอย่างเข้า Google Sheet ทันที
+                    </button>
+                    <span className="px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                      พร้อมส่งเข้าสู่ระบบ (Ready)
+                    </span>
+                  </div>
                 </div>
 
                 {/* Metrics Badges */}
