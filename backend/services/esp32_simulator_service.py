@@ -300,6 +300,35 @@ class CircuitEnergySimulator:
                     self.last_batch_at = datetime.now().isoformat()
 
                 logger.info(f"{logger_prefix} Sent {len(readings)} readings to DB.")
+
+                # Also forward live stream to Google Sheet Web App if connected
+                try:
+                    from backend.services.gsheet_service import get_sheet_url
+                    s_url = get_sheet_url()
+                    if s_url and readings:
+                        import urllib.request
+                        import json
+                        s_rows = []
+                        for r in readings:
+                            s_rows.append({
+                                "timestamp": r.get("timestamp"),
+                                "device_id": r.get("device_id"),
+                                "power_w": r.get("power", r.get("power_w", 0)),
+                                "energy_kwh": r.get("energy", r.get("energy_kwh", 0)),
+                                "voltage": r.get("voltage", 230.0),
+                                "current": r.get("current", 0.0),
+                                "temperature": r.get("temperature", 28.0),
+                                "humidity": r.get("humidity", 60.0),
+                                "occupancy": r.get("occupancy", 1),
+                            })
+                        req_s = urllib.request.Request(
+                            s_url,
+                            data=json.dumps(s_rows).encode("utf-8"),
+                            headers={"Content-Type": "application/json"}
+                        )
+                        urllib.request.urlopen(req_s, timeout=8)
+                except Exception:
+                    pass
             except Exception as e:
                 with self._lock:
                     self.packets_failed += 1
