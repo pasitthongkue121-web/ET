@@ -38,8 +38,17 @@ def _set_config(key: str, value: str) -> None:
     conn.commit()
     conn.close()
 
+DEFAULT_GSHEET_URL = "https://script.google.com/macros/s/AKfycbwx0nIl9fswC9mtNivXEv4gzeKh0O07bImCEAe6XV2VEQZT7ObKdSP5L4CHg4UaneSf/exec"
+
 def get_sheet_url() -> Optional[str]:
-    return _get_config('web_app_url')
+    import os
+    env_url = os.getenv('GSHEET_WEB_APP_URL')
+    if env_url:
+        return env_url
+    db_url = _get_config('web_app_url')
+    if db_url:
+        return db_url
+    return DEFAULT_GSHEET_URL
 
 def save_sheet_url(url: str) -> None:
     _set_config('web_app_url', url)
