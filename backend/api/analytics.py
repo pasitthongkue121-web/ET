@@ -99,6 +99,11 @@ def export_energy_readings_csv(
         SELECT r.id, r.timestamp, r.device_id, r.voltage, r.current, r.power, r.energy,
                r.data_source, r.simulation_batch_id
         FROM energy_readings r
+        INNER JOIN (
+            SELECT MAX(id) as max_id
+            FROM energy_readings
+            GROUP BY timestamp, device_id
+        ) latest ON r.id = latest.max_id
         WHERE 1=1
     """
     params = []
