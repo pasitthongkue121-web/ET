@@ -38,10 +38,13 @@ export default function PowerChart({
       fallback.push({
         time: timeStr,
         power_w: w,
+        power_kw: w / 1000,
         energy_kwh: (w * 2) / 1000,
-        voltage_v: 230,
+        voltage: 230,
         current_a: +(w / 230).toFixed(1),
-        device_count: 3,
+        temperature: 28,
+        cost_thb: +(w * 2 / 1000 * 4.2).toFixed(2),
+        occupancy: true,
       });
     }
     return fallback;
