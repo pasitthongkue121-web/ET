@@ -514,6 +514,8 @@ export interface PipelineTransmitResponse {
   batch_id: string;
   elapsed_seconds: number;
   data_source: string;
+  gsheet_pushed?: boolean;
+  gsheet_rows_pushed?: number;
 }
 
 export async function getSimulationCircuits(): Promise<{ circuits: CircuitItem[] }> {
