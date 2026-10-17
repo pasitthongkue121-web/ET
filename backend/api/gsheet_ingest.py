@@ -458,6 +458,75 @@ def transmit_simulation_data(req: PipelineSimTransmitRequest):
     return result
 
 
+class ClearSimulationRequest(BaseModel):
+    batch_id: Optional[str] = None
+    clear_all_simulated: bool = True
+    clear_google_sheet: bool = False
+
+
+@router.post("/simulation/clear")
+def clear_simulation_readings(req: Optional[ClearSimulationRequest] = None):
+    """
+    Cleans up residual simulated data from database while strictly preserving real physical device data.
+    Optionally also clears the connected Google Sheet.
+    """
+    conn = get_connection()
+    c = conn.cursor()
+    
+    if req and req.batch_id:
+        c.execute("DELETE FROM energy_readings WHERE simulation_batch_id = ? AND data_source = 'simulated'", (req.batch_id,))
+    else:
+        c.execute("DELETE FROM energy_readings WHERE data_source = 'simulated'")
+    
+    deleted_count = c.rowcount
+    conn.commit()
+    conn.close()
+
+    from backend.services.gsheet_service import clear_sheet_cache
+    clear_sheet_cache()
+
+    sheet_cleared = False
+    if req and req.clear_google_sheet:
+        sheet_url = get_sheet_url()
+        if sheet_url:
+            try:
+                import urllib.request, json
+                payload = json.dumps({"action": "clear"}).encode("utf-8")
+                req_s = urllib.request.Request(sheet_url, data=payload, headers={"Content-Type": "application/json"})
+                urllib.request.urlopen(req_s, timeout=10)
+                sheet_cleared = True
+            except Exception:
+                pass
+
+    return {
+        "status": "success",
+        "message": f"ล้างข้อมูลจำลองตกค้างเรียบร้อยแล้ว ({deleted_count} รายการ)",
+        "deleted_records": deleted_count,
+        "google_sheet_cleared": sheet_cleared,
+        "real_data_preserved": True
+    }
+
+
+@router.post("/clear-sheet")
+def clear_google_sheet():
+    """
+    Clears all data rows from the connected Google Sheet (row 2 downwards), leaving headers.
+    """
+    sheet_url = get_sheet_url()
+    if not sheet_url:
+        raise HTTPException(status_code=400, detail="ยังไม่ได้เชื่อมต่อ Google Sheet Web App URL")
+    try:
+        import urllib.request, json
+        payload = json.dumps({"action": "clear"}).encode("utf-8")
+        req = urllib.request.Request(sheet_url, data=payload, headers={"Content-Type": "application/json"})
+        resp = urllib.request.urlopen(req, timeout=12)
+        from backend.services.gsheet_service import clear_sheet_cache
+        clear_sheet_cache()
+        return {"status": "success", "message": "ส่งคำสั่งล้างข้อมูลตกค้างใน Google Sheet สำเร็จ"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"ไม่สามารถล้างข้อมูลใน Google Sheet ได้: {e}")
+
+
 # -------------------------------------------------------------------
 # Upgraded Bidirectional Google Apps Script Template
 # -------------------------------------------------------------------
@@ -465,10 +534,9 @@ APPS_SCRIPT_CODE = r"""// ======================================================
 // ENERGY TWINS AI - Google Sheets 2-Way IoT Telemetry Hub
 // ====================================================================
 // FEATURES:
-//   1. doPost(e) : Ingests JSON from ESP32 or Simulator, auto-creates
-//                  headers, appends rows, and caps to last 5,000 rows.
-//   2. doGet(e)  : Serves latest data to FastAPI with ?action=latest
-//   3. Optional  : Webhook push back to FastAPI for 0-latency updates.
+//   1. doPost(e) : Ingests JSON from ESP32 or Simulator, handles clear/reset,
+//                  auto-creates headers, appends rows, caps to 5,000 rows.
+//   2. doGet(e)  : Serves latest data to FastAPI, or ?action=clear to reset.
 // ====================================================================
 
 var SHEET_HEADERS = [
@@ -484,7 +552,20 @@ function doPost(e) {
     var sheet = getOrCreateSheet();
     var content = e.postData.contents;
     var data = JSON.parse(content);
-    
+
+    // Support Clean Reset / Clear residual data
+    if (!Array.isArray(data) && (data.action === "clear" || data.action === "reset")) {
+      var lastRow = sheet.getLastRow();
+      if (lastRow > 1) {
+        sheet.deleteRows(2, lastRow - 1);
+      }
+      return jsonResponse({
+        status: "success",
+        message: "ล้างข้อมูลตกค้างใน Google Sheet เรียบร้อยแล้ว",
+        cleared_rows: Math.max(0, lastRow - 1)
+      });
+    }
+
     // Support single object or array of objects
     var rows = Array.isArray(data) ? data : [data];
     var nowStr = Utilities.formatDate(new Date(), "Asia/Bangkok", "yyyy-MM-dd HH:mm:ss");
@@ -525,13 +606,25 @@ function doPost(e) {
 }
 
 // --------------------------------------------------------------------
-// 2. SERVE DATA TO FASTAPI BACKEND (doGet)
+// 2. SERVE DATA TO FASTAPI BACKEND OR RESET VIA GET (doGet)
 // --------------------------------------------------------------------
 function doGet(e) {
   try {
     var sheet = getOrCreateSheet();
     var lastRow = sheet.getLastRow();
     var lastCol = sheet.getLastColumn();
+
+    // Support Clean Reset via GET URL: ?action=clear
+    if (e && e.parameter && (e.parameter.action === "clear" || e.parameter.action === "reset")) {
+      if (lastRow > 1) {
+        sheet.deleteRows(2, lastRow - 1);
+      }
+      return jsonResponse({
+        status: "success",
+        message: "ล้างข้อมูลตกค้างใน Google Sheet เรียบร้อยแล้ว",
+        cleared_rows: Math.max(0, lastRow - 1)
+      });
+    }
 
     if (lastRow < 2) {
       return jsonResponse({ data: [], total_rows: 0, message: "Sheet has only headers" });
