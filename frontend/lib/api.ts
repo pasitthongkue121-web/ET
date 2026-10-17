@@ -42,7 +42,7 @@ async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutM
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), timeoutMs);
   const token = typeof window !== 'undefined' ? localStorage.getItem('energy_token') : null;
-  const authHeaders = token ? { 'Authorization': `Bearer ${token}` } : {};
+  const authHeaders: Record<string, string> = token ? { 'Authorization': `Bearer ${token}` } : {};
   try {
     const response = await fetch(url, {
       ...options,
