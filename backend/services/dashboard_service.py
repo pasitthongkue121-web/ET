@@ -19,29 +19,45 @@ class DashboardService:
     def _calc_total_energy_kwh(self, readings: List[Dict[str, Any]]) -> float:
         if not readings:
             return 0.0
-        by_dev: Dict[str, List[Dict[str, Any]]] = {}
-        for r in readings:
-            dev = r.get("device_id")
-            if not dev:
-                continue
-            # Exclude solar generation from consumption calculations
-            if r.get("category") == "solar" or r.get("is_generation") or dev == "circuit_solar":
-                continue
-            by_dev.setdefault(dev, []).append(r)
-        
-        total_kwh = 0.0
-        for dev, dev_readings in by_dev.items():
-            energies = [float(r.get("energy", 0.0)) for r in dev_readings if r.get("energy") is not None]
-            if len(energies) >= 2:
-                dev_delta = max(energies) - min(energies)
-                if dev_delta > 0:
-                    total_kwh += dev_delta
-                    continue
-            powers = [float(r.get("power", 0.0)) for r in dev_readings if r.get("power") is not None]
-            if powers:
-                # 1 minute per reading assumption: (W / 1000) / 60
-                total_kwh += sum(powers) / 1000.0 / 60.0
-        return round(max(0.0, total_kwh), 2)
+        # Exclude solar generation from consumption calculations
+        consumption = [
+            r for r in readings
+            if r.get("category") != "solar"
+            and not r.get("is_generation")
+            and r.get("device_id") != "circuit_solar"
+        ]
+        if not consumption:
+            return 0.0
+
+        try:
+            df = pd.DataFrame(consumption)
+            if "power" not in df.columns or "timestamp" not in df.columns:
+                return 0.0
+
+            df["power"] = pd.to_numeric(df["power"], errors="coerce").fillna(0.0).abs()
+            df["dt"] = pd.to_datetime(df["timestamp"], format="mixed", errors="coerce")
+            df = df.dropna(subset=["dt"]).sort_values("dt")
+
+            if df.empty:
+                return 0.0
+
+            # Sum power across devices for each distinct timestamp
+            ts_power = df.groupby("dt")["power"].sum().reset_index()
+
+            if len(ts_power) == 1:
+                return round((float(ts_power["power"].iloc[0]) / 1000.0) * (1.0 / 60.0), 3)
+
+            # Calculate time difference between consecutive samples (in hours, capped at 1h max per gap)
+            diff_hours = ts_power["dt"].diff().dt.total_seconds().div(3600.0)
+            median_diff = diff_hours.median()
+            if pd.isna(median_diff) or median_diff <= 0:
+                median_diff = 1.0 / 60.0
+            diff_hours = diff_hours.fillna(median_diff).clip(lower=0.0, upper=1.0)
+
+            total_kwh = (ts_power["power"] / 1000.0 * diff_hours).sum()
+            return round(max(0.0, float(total_kwh)), 2)
+        except Exception:
+            return 0.0
 
     def get_dashboard_summary(self) -> DashboardSummaryResponse:
         latest_readings = self.repo.get_latest_device_readings()
