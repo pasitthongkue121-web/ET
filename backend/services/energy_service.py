@@ -70,10 +70,13 @@ class EnergyService:
         df["occupancy"] = df["occupancy"].fillna(1).astype(int)
 
         # Step 1: Sum across concurrent circuit branches for each exact timestamp
+        # Estimate interval in hours per sample (assume 1 minute default)
+        df["kwh_slice"] = (df["power"] / 1000.0) * (1.0 / 60.0)
+
         if not device_id:
             ts_summary = df.groupby("timestamp", as_index=False).agg({
                 "power": "sum",
-                "energy": "sum",
+                "kwh_slice": "sum",
                 "voltage": "mean",
                 "current": "sum",
                 "temperature": "mean",
@@ -92,7 +95,7 @@ class EnergyService:
 
         grouped = ts_summary.groupby("time_label", as_index=False).agg({
             "power": "mean",
-            "energy": "sum",
+            "kwh_slice": "sum",
             "voltage": "mean",
             "current": "mean",
             "temperature": "mean",
@@ -102,19 +105,35 @@ class EnergyService:
         timeseries = []
         for _, row in grouped.iterrows():
             p_w = max(0.0, float(row["power"]))
+            bin_kwh = max(0.0, float(row["kwh_slice"]))
             timeseries.append({
                 "time": str(row["time_label"]),
                 "power_w": round(p_w, 1),
                 "power_kw": round(p_w / 1000.0, 2),
-                "energy_kwh": round(max(0.0, float(row["energy"])), 3),
+                "energy_kwh": round(bin_kwh, 3),
                 "voltage": round(max(0.0, float(row["voltage"])), 1),
                 "current_a": round(max(0.0, float(row["current"])), 2),
                 "temperature": round(float(row["temperature"]), 1),
-                "cost_thb": round(max(0.0, float(row["energy"])) * ELECTRICITY_RATE_PER_KWH, 2),
+                "cost_thb": round(bin_kwh * ELECTRICITY_RATE_PER_KWH, 2),
                 "occupancy": bool(row["occupancy"])
             })
 
-        total_energy = round(max(0.0, float(ts_summary["energy"].sum())), 2)
+        # Calculate accurate total energy using delta or Riemann sum
+        by_dev = df.groupby("device_id")
+        total_delta_kwh = 0.0
+        used_delta = False
+        for _, dev_df in by_dev:
+            e_vals = dev_df["energy"].dropna().tolist()
+            if len(e_vals) >= 2:
+                d = max(e_vals) - min(e_vals)
+                if d > 0:
+                    total_delta_kwh += d
+                    used_delta = True
+
+        if used_delta and total_delta_kwh > 0:
+            total_energy = round(total_delta_kwh, 2)
+        else:
+            total_energy = round(max(0.0, float(ts_summary["kwh_slice"].sum())), 2)
         total_cost = round(total_energy * ELECTRICITY_RATE_PER_KWH, 2)
 
         return {
