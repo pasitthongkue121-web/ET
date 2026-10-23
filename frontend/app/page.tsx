@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { isLoggedIn } from '../lib/auth';
+import { isLoggedIn, getUserName } from '../lib/auth';
 
 import AppShell from '../components/AppShell';
 import MetricCard from '../components/MetricCard';
@@ -210,6 +210,28 @@ export default function DashboardPage() {
       autoRefreshCountdown={countdown}
     >
       <div className="space-y-3.5">
+
+        {/* User Isolation & Profile Banner */}
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-sky-500/20 bg-slate-900/60 px-4 py-2.5 backdrop-blur-sm">
+          <div className="flex items-center gap-2.5 text-xs">
+            <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-sky-500/20 text-sky-400">
+              <ShieldCheck className="h-3.5 w-3.5" />
+            </span>
+            <div>
+              <span className="font-semibold text-white">
+                {summary?.user_name ? ("ยินดีต้อนรับคุณ " + summary.user_name) : (typeof window !== "undefined" && getUserName()) ? ("บัญชี: " + getUserName()) : "ระบบติดตามพลังงาน"}
+              </span>
+              <span className="ml-2 text-[11px] text-sky-400 hidden sm:inline">
+                • User Isolation (แสดงข้อมูลเฉพาะบ้านของคุณ)
+              </span>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 text-[11px] text-slate-400 font-mono">
+            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-emerald-400 border border-emerald-500/20">
+              ● Two-sided Platform
+            </span>
+          </div>
+        </div>
 
         {/* ─── Compact Notification Banner (if any) ───────────────────── */}
         {error && (
