@@ -214,17 +214,9 @@ class SQLiteEnergyRepository(BaseEnergyRepository):
             """, (start_time, end_time, device_id))
         else:
             cursor.execute("""
-                SELECT timestamp, 
-                       ROUND(AVG(voltage), 1) as voltage,
-                       ROUND(SUM(current), 2) as current,
-                       ROUND(SUM(power), 1) as power,
-                       ROUND(SUM(energy), 4) as energy,
-                       ROUND(AVG(temperature), 1) as temperature,
-                       ROUND(AVG(humidity), 1) as humidity,
-                       MAX(occupancy) as occupancy
+                SELECT timestamp, device_id, voltage, current, power, energy, temperature, humidity, occupancy
                 FROM energy_readings
                 WHERE timestamp BETWEEN ? AND ?
-                GROUP BY timestamp
                 ORDER BY timestamp ASC
             """, (start_time, end_time))
         rows = cursor.fetchall()
