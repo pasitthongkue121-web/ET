@@ -118,22 +118,8 @@ class EnergyService:
                 "occupancy": bool(row["occupancy"])
             })
 
-        # Calculate accurate total energy using delta or Riemann sum
-        by_dev = df.groupby("device_id")
-        total_delta_kwh = 0.0
-        used_delta = False
-        for _, dev_df in by_dev:
-            e_vals = dev_df["energy"].dropna().tolist()
-            if len(e_vals) >= 2:
-                d = max(e_vals) - min(e_vals)
-                if d > 0:
-                    total_delta_kwh += d
-                    used_delta = True
-
-        if used_delta and total_delta_kwh > 0:
-            total_energy = round(total_delta_kwh, 2)
-        else:
-            total_energy = round(max(0.0, float(ts_summary["kwh_slice"].sum())), 2)
+        # Sum total energy across all time bins (Riemann sum of active power)
+        total_energy = round(sum(float(item["energy_kwh"]) for item in timeseries), 2)
         total_cost = round(total_energy * ELECTRICITY_RATE_PER_KWH, 2)
 
         return {
