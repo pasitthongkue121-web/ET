@@ -90,6 +90,37 @@ export async function getDevices(): Promise<Device[]> {
   return await res.json();
 }
 
+export interface CreateDeviceInput {
+  name: string;
+  category: string;
+  rated_power: number;
+  room_id?: string;
+}
+
+export async function createDevice(data: CreateDeviceInput): Promise<any> {
+  const res = await fetchWithTimeout(`${API_BASE_URL}/api/devices`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Failed to create device' }));
+    throw new Error(err.detail || 'Failed to create device');
+  }
+  return await res.json();
+}
+
+export async function deleteDevice(deviceId: string): Promise<any> {
+  const res = await fetchWithTimeout(`${API_BASE_URL}/api/devices/${deviceId}`, {
+    method: 'DELETE',
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Failed to delete device' }));
+    throw new Error(err.detail || 'Failed to delete device');
+  }
+  return await res.json();
+}
+
 export async function getRooms(): Promise<Room[]> {
   const res = await fetchWithTimeout(`${API_BASE_URL}/api/rooms`);
   if (!res.ok) throw new Error(`Failed to fetch rooms: ${res.status}`);
