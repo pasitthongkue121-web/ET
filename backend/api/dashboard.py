@@ -20,7 +20,14 @@ def get_dashboard_summary(
     Otherwise, returns default system dashboard.
     """
     if user:
-        from backend.api.dashboard_v2 import get_dashboard
-        return get_dashboard(db=db, current_user=user)
+        try:
+            from backend.api.dashboard_v2 import get_dashboard
+            return get_dashboard(db=db, current_user=user)
+        except Exception as e:
+            res = dashboard_service.get_dashboard_summary()
+            d = res.model_dump() if hasattr(res, "model_dump") else (res.dict() if hasattr(res, "dict") else dict(res))
+            d["user_name"] = user.name
+            d["is_user_isolated"] = True
+            return d
 
     return dashboard_service.get_dashboard_summary()
