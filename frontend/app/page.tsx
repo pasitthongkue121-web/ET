@@ -466,7 +466,7 @@ export default function DashboardPage() {
 
           {/* Tab 1: Devices */}
           {activeSecondaryTab === 'devices' && (
-            <DeviceGrid devices={devices} />
+            <DeviceGrid devices={devices} onDeviceChanged={loadData} />
           )}
 
           {/* Tab 2: Energy Score & AI Insights */}
