@@ -16,6 +16,33 @@ class DashboardService:
     def __init__(self):
         self.repo = get_repository()
 
+    def _calc_total_energy_kwh(self, readings: List[Dict[str, Any]]) -> float:
+        if not readings:
+            return 0.0
+        by_dev: Dict[str, List[Dict[str, Any]]] = {}
+        for r in readings:
+            dev = r.get("device_id")
+            if not dev:
+                continue
+            # Exclude solar generation from consumption calculations
+            if r.get("category") == "solar" or r.get("is_generation") or dev == "circuit_solar":
+                continue
+            by_dev.setdefault(dev, []).append(r)
+        
+        total_kwh = 0.0
+        for dev, dev_readings in by_dev.items():
+            energies = [float(r.get("energy", 0.0)) for r in dev_readings if r.get("energy") is not None]
+            if len(energies) >= 2:
+                dev_delta = max(energies) - min(energies)
+                if dev_delta > 0:
+                    total_kwh += dev_delta
+                    continue
+            powers = [float(r.get("power", 0.0)) for r in dev_readings if r.get("power") is not None]
+            if powers:
+                # 1 minute per reading assumption: (W / 1000) / 60
+                total_kwh += sum(powers) / 1000.0 / 60.0
+        return round(max(0.0, total_kwh), 2)
+
     def get_dashboard_summary(self) -> DashboardSummaryResponse:
         latest_readings = self.repo.get_latest_device_readings()
         devices = self.repo.get_devices()
@@ -73,24 +100,12 @@ class DashboardService:
 
         # 2. Today's Energy & Cost (house consumption only)
         today_readings = self.repo.get_readings_timeseries(today_start_str, ref_time_str)
-        today_energy_kwh = 0.0
-        if today_readings:
-            today_consumption = [
-                r for r in today_readings
-                if r.get("category") != "solar" and not r.get("is_generation") and r.get("device_id") != "circuit_solar"
-            ] or today_readings
-            today_energy_kwh = round(max(0.0, sum(max(0.0, float(r.get("energy", 0.0))) for r in today_consumption)), 2)
+        today_energy_kwh = self._calc_total_energy_kwh(today_readings)
         today_cost_thb = round(today_energy_kwh * ELECTRICITY_RATE_PER_KWH, 2)
 
         # 3. 30-Day Monthly Energy & Forecast (house consumption only)
         monthly_readings = self.repo.get_readings_timeseries(month_start_str, ref_time_str)
-        monthly_energy_kwh = 0.0
-        if monthly_readings:
-            monthly_consumption = [
-                r for r in monthly_readings
-                if r.get("category") != "solar" and not r.get("is_generation") and r.get("device_id") != "circuit_solar"
-            ] or monthly_readings
-            monthly_energy_kwh = round(max(0.0, sum(max(0.0, float(r.get("energy", 0.0))) for r in monthly_consumption)), 2)
+        monthly_energy_kwh = self._calc_total_energy_kwh(monthly_readings)
         monthly_cost_thb = round(monthly_energy_kwh * ELECTRICITY_RATE_PER_KWH, 2)
 
         # Daily average run-rate for projection (30 days)
@@ -153,24 +168,37 @@ class DashboardService:
             metric_value=f"{peak_power_val} W"
         ))
 
-        # Insight 2: Top Consuming Device
-        # Query device breakdown over 30 days
-        repo_conn = self.repo
-        # We can query all device readings from database
+        # Insight 2: Top Consuming Device (exclude solar generation)
         from backend.database.connection import get_connection
         conn = get_connection()
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT d.name, d.device_id, rm.name as room_name, ROUND(SUM(r.energy), 2) as total_kwh
+            SELECT d.name, d.device_id, rm.name as room_name,
+                   MAX(r.energy) - MIN(r.energy) as delta_kwh,
+                   AVG(r.power) as avg_power_w
             FROM energy_readings r
             JOIN devices d ON r.device_id = d.device_id
             JOIN rooms rm ON d.room_id = rm.id
             WHERE r.timestamp BETWEEN ? AND ?
+              AND d.category != 'solar'
+              AND d.device_id != 'circuit_solar'
             GROUP BY d.device_id
-            ORDER BY total_kwh DESC
         """, (start_str, end_str))
-        dev_rows = cursor.fetchall()
+        raw_dev_rows = cursor.fetchall()
         conn.close()
+
+        dev_rows = []
+        for row in raw_dev_rows:
+            dkwh = float(row["delta_kwh"] or 0.0)
+            if dkwh <= 0.0 and row["avg_power_w"]:
+                dkwh = float(row["avg_power_w"]) * 24.0 / 1000.0
+            dev_rows.append({
+                "name": row["name"],
+                "device_id": row["device_id"],
+                "room_name": row["room_name"],
+                "total_kwh": round(max(0.0, dkwh), 2)
+            })
+        dev_rows.sort(key=lambda x: x["total_kwh"], reverse=True)
 
         if dev_rows:
             top_dev = dev_rows[0]
