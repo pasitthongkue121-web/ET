@@ -150,6 +150,33 @@ class EnergyService:
         }
 
         row_id = self.repo.insert_reading(reading_dict)
+
+        # Forward reading to Google Sheets in background if configured (non-blocking)
+        try:
+            from backend.services.gsheet_service import get_sheet_url
+            sheet_url = get_sheet_url()
+            if sheet_url:
+                import json
+                import threading
+                import urllib.request
+
+                def _forward_to_sheet():
+                    try:
+                        post_data = json.dumps(reading_dict).encode("utf-8")
+                        req = urllib.request.Request(
+                            sheet_url,
+                            data=post_data,
+                            headers={"Content-Type": "application/json"},
+                            method="POST"
+                        )
+                        urllib.request.urlopen(req, timeout=10)
+                    except Exception:
+                        pass
+
+                threading.Thread(target=_forward_to_sheet, daemon=True).start()
+        except Exception:
+            pass
+
         return {
             "status": "success",
             "message": "ESP32 reading ingested successfully",
