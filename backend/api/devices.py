@@ -1,6 +1,10 @@
-from fastapi import APIRouter, HTTPException
-from typing import List, Optional
+from fastapi import APIRouter, HTTPException, Depends
+from typing import List, Optional, Any
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
+from backend.database.database import get_db
+from backend.database.orm_models import User, Device as ORMDevice, EnergyData
+from backend.core.auth import get_optional_current_user
 from backend.database.models import DeviceStatusResponse
 from backend.database.repository import get_repository
 from backend.services.dashboard_service import dashboard_service
@@ -14,11 +18,44 @@ class CreateDeviceRequest(BaseModel):
     rated_power: float = 1000.0
     category: str = "appliance"
 
-@router.get("", response_model=List[DeviceStatusResponse])
-def get_devices():
+@router.get("")
+def get_devices(
+    user: Optional[User] = Depends(get_optional_current_user),
+    db: Session = Depends(get_db)
+):
     """
-    Returns list of all household devices with real-time status and power readings.
+    Returns list of devices with real-time status and power readings.
+    If authenticated, returns devices isolated to the current user.
     """
+    if user:
+        user_devs = db.query(ORMDevice).filter(ORMDevice.user_id == user.id).all()
+        if user_devs:
+            result = []
+            for d in user_devs:
+                # Find latest energy reading for power status
+                latest_reading = db.query(EnergyData).filter(
+                    EnergyData.user_id == user.id,
+                    EnergyData.device_id == d.id
+                ).order_by(EnergyData.timestamp.desc()).first()
+
+                curr_p = float(latest_reading.power) if latest_reading and latest_reading.power else 0.0
+                curr_kwh = float(latest_reading.energy_kwh) if latest_reading and latest_reading.energy_kwh else 0.0
+                is_on = curr_p > 5.0
+                result.append({
+                    "device_id": d.id,
+                    "name": d.device_name,
+                    "room_id": "home_main",
+                    "room_name": d.location or "บ้านของคุณ",
+                    "rated_power": float(d.rated_power),
+                    "status": is_on,
+                    "current_power": curr_p,
+                    "today_energy": curr_kwh,
+                    "runtime_hours": 8.0 if is_on else 0.0,
+                    "temperature": float(latest_reading.temperature) if latest_reading and latest_reading.temperature else 26.0,
+                    "category": d.device_type or "appliance"
+                })
+            return result
+
     return dashboard_service.get_devices_detail()
 
 @router.post("")
