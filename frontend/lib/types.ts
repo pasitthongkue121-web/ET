@@ -21,6 +21,7 @@ export interface Device {
   runtime_hours: number;
   temperature?: number | null;
   category: string;
+  api_key?: string;
 }
 
 export interface EnergyReadingTimeseries {
