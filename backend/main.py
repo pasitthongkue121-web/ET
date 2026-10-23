@@ -85,9 +85,9 @@ app.include_router(tou_simulation.router)
 @app.on_event("startup")
 def on_startup():
     # ── Create SQLAlchemy (multi-user) tables ─────────────────────────────────
-    from backend.database.database import engine as sqla_engine, SessionLocal as sqla_session
+    from backend.database.database import SessionLocal as sqla_session, init_tables
     from backend.database import orm_models as sqla_models
-    sqla_models.Base.metadata.create_all(bind=sqla_engine)
+    init_tables()
     logger.info("[STARTUP] SQLAlchemy multi-user tables created/verified ✅")
 
     # ── Seed Admin User ────────────────────────────────────────────────────────
