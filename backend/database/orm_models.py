@@ -22,6 +22,7 @@ class Device(Base):
     device_type = Column(String, nullable=False)
     rated_power = Column(Float, nullable=False)
     location = Column(String)
+    api_key = Column(String, unique=True, index=True, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     
     owner = relationship("User", back_populates="devices")
