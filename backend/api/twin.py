@@ -12,23 +12,28 @@ from backend.database.models import (
 
 router = APIRouter(prefix="/api/twin", tags=["Digital Twin"])
 
-@router.get("/home", response_model=DigitalTwinHome)
+@router.get("/home")
 def get_twin_home():
     """
     Returns overall digital twin summary for the residence (Power, Energy, Costs, Device counts).
     """
     try:
-        return twin_service.get_home()
+        data = twin_service.get_home()
+        if isinstance(data, dict):
+            return data
     except Exception:
-        return DigitalTwinHome(
-            total_power_w=850.0,
-            total_power_kw=0.85,
-            daily_energy_kwh=12.4,
-            monthly_energy_kwh=280.0,
-            total_devices=3,
-            active_devices=2,
-            cost_today_thb=42.5
-        )
+        pass
+    return {
+        "home_id": "HOME_TWIN_01",
+        "name": "ENERGY TWINS Residence",
+        "total_power_w": 850.0,
+        "total_power_kw": 0.85,
+        "daily_energy_kwh": 12.4,
+        "monthly_energy_kwh": 280.0,
+        "total_devices": 3,
+        "active_devices": 2,
+        "cost_today_thb": 42.5
+    }
 
 @router.get("/rooms", response_model=List[DigitalTwinRoom])
 def get_twin_rooms():
