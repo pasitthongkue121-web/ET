@@ -122,7 +122,12 @@ export default function DashboardPage() {
         getGSheetStatus().catch(() => null),
       ]);
 
-      if (sumRes) setSummary(sumRes);
+      if (sumRes) {
+        setSummary(sumRes);
+        setIsBackendOnline(true);
+      } else if (isHealthy) {
+        setIsBackendOnline(true);
+      }
       if (energyRes) setEnergyData(energyRes);
       setDevices(devRes as Device[]);
       setAnalyticsSummary(anSumRes);
