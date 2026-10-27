@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
+import { isLoggedIn } from '../../lib/auth';
 import AppShell from '../../components/AppShell';
 import { getRoutine, getRoutineProbabilities, checkBackendHealth } from '../../lib/api';
 import { RoutineResponse, RoutineProbability, RoutineTimelineItem, DeviceRoutineProfile } from '../../lib/types';
@@ -17,6 +19,13 @@ import {
 } from '../../components/Icons';
 
 export default function PersonalRoutinePage() {
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!isLoggedIn()) {
+      router.replace('/login');
+    }
+  }, [router]);
   const [routine, setRoutine] = useState<RoutineResponse | null>(null);
   const [probabilities, setProbabilities] = useState<RoutineProbability | null>(null);
   const [isLoading, setIsLoading] = useState(true);
