@@ -2,12 +2,15 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import AppShell from '../../components/AppShell';
+import { useRouter } from 'next/navigation';
+import { isLoggedIn } from '../../lib/auth';
 import PowerChart from '../../components/PowerChart';
 import { getEnergyHistory, getDevices, checkBackendHealth } from '../../lib/api';
 import { EnergyHistoryResponse, Device } from '../../lib/types';
 import { Zap, Activity, Gauge, BatteryCharging, DollarSign, Filter, RefreshCw, Layers, Download } from '../../components/Icons';
 
 export default function EnergyMonitorPage() {
+  const router = useRouter();
   const [period, setPeriod] = useState<'today' | '7d' | '30d'>('today');
   const [selectedDevice, setSelectedDevice] = useState<string>('');
   const [devices, setDevices] = useState<Device[]>([]);
@@ -15,7 +18,14 @@ export default function EnergyMonitorPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isBackendOnline, setIsBackendOnline] = useState(true);
 
+  useEffect(() => {
+    if (!isLoggedIn()) {
+      router.replace('/login');
+    }
+  }, [router]);
+
   const loadData = useCallback(async () => {
+    if (!isLoggedIn()) return;
     setIsLoading(true);
     try {
       const isHealthy = await checkBackendHealth();
@@ -27,6 +37,9 @@ export default function EnergyMonitorPage() {
       ]);
       setDevices(devRes);
       setHistory(histRes);
+      if (histRes || (devRes && devRes.length > 0)) {
+        setIsBackendOnline(true);
+      }
     } catch (err) {
       console.error('Error loading monitor data:', err);
       setIsBackendOnline(false);
