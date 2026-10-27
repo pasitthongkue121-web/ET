@@ -208,7 +208,25 @@ def get_circuits_status():
         return {
             "total_power_w": tot_p,
             "total_rated_w": c_light["rated_power_w"] + c_recep["rated_power_w"] + c_heavy["rated_power_w"],
-            "circuits": [c_light, c_recep, c_heavy]
+            "circuits": [c_light, c_recep, c_heavy],
+            "lighting": {
+                "name": c_light["category_name"],
+                "devices": c_light["devices"],
+                "total_power_w": c_light["current_power_w"],
+                "rated_power_w": c_light["rated_power_w"]
+            },
+            "receptacle": {
+                "name": c_recep["category_name"],
+                "devices": c_recep["devices"],
+                "total_power_w": c_recep["current_power_w"],
+                "rated_power_w": c_recep["rated_power_w"]
+            },
+            "heavy_load": {
+                "name": c_heavy["category_name"],
+                "devices": c_heavy["devices"],
+                "total_power_w": c_heavy["current_power_w"],
+                "rated_power_w": c_heavy["rated_power_w"]
+            }
         }
     except Exception as e:
         return {
@@ -218,7 +236,25 @@ def get_circuits_status():
                 {"category_id": "lighting", "category_name": "วงจรแสงสว่าง (Lighting)", "device_count": 1, "active_count": 1, "rated_power_w": 800.0, "current_power_w": 250.0, "percentage_of_total": 8.8, "devices": []},
                 {"category_id": "receptacle", "category_name": "วงจรเต้ารับ (Receptacle)", "device_count": 1, "active_count": 1, "rated_power_w": 2000.0, "current_power_w": 750.0, "percentage_of_total": 26.3, "devices": []},
                 {"category_id": "heavy_load", "category_name": "โหลดกำลังสูง (Heavy Load)", "device_count": 1, "active_count": 1, "rated_power_w": 5000.0, "current_power_w": 1850.0, "percentage_of_total": 64.9, "devices": []}
-            ]
+            ],
+            "lighting": {
+                "name": "วงจรแสงสว่าง (Lighting)",
+                "devices": [],
+                "total_power_w": 250.0,
+                "rated_power_w": 800.0
+            },
+            "receptacle": {
+                "name": "วงจรเต้ารับ (Receptacle)",
+                "devices": [],
+                "total_power_w": 750.0,
+                "rated_power_w": 2000.0
+            },
+            "heavy_load": {
+                "name": "โหลดกำลังสูง (Heavy Load)",
+                "devices": [],
+                "total_power_w": 1850.0,
+                "rated_power_w": 5000.0
+            }
         }
 
 

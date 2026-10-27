@@ -31,9 +31,59 @@ import {
   TOUSimulateRequest
 } from '../../lib/api';
 
+
+const DEFAULT_CIRCUITS: CircuitsResponse = {
+  lighting: {
+    name: 'วงจรแสงสว่าง (Lighting)',
+    total_power_w: 120,
+    rated_power_w: 450,
+    devices: [
+      { device_id: 'light_lr', name: 'โคมไฟห้องนั่งเล่น LED', room_id: 'living_room', rated_power: 50, status: 1, category: 'lighting', circuit: 'lighting', current_power_w: 45 },
+      { device_id: 'light_corridor', name: 'ไฟทางเดินและระเบียง LED', room_id: 'corridor', rated_power: 35, status: 1, category: 'lighting', circuit: 'lighting', current_power_w: 30 },
+      { device_id: 'light_bed', name: 'โคมไฟห้องนอนใหญ่ LED', room_id: 'bedroom', rated_power: 50, status: 1, category: 'lighting', circuit: 'lighting', current_power_w: 45 }
+    ]
+  },
+  receptacle: {
+    name: 'วงจรเต้ารับและเครื่องใช้ไฟฟ้า (Receptacle)',
+    total_power_w: 550,
+    rated_power_w: 2500,
+    devices: [
+      { device_id: 'fridge', name: 'ตู้เย็น Inverter Multi-Door', room_id: 'kitchen', rated_power: 220, status: 1, category: 'refrigeration', circuit: 'receptacle', current_power_w: 120 },
+      { device_id: 'pc', name: 'คอมพิวเตอร์ Workstation', room_id: 'working_room', rated_power: 650, status: 1, category: 'electronics', circuit: 'receptacle', current_power_w: 280 },
+      { device_id: 'router', name: 'เราเตอร์ Wi-Fi 6 & สมาร์ทฮับ', room_id: 'living_room', rated_power: 50, status: 1, category: 'network', circuit: 'receptacle', current_power_w: 35 },
+      { device_id: 'tv', name: 'สมาร์ททีวี 65 นิ้ว OLED', room_id: 'living_room', rated_power: 180, status: 1, category: 'entertainment', circuit: 'receptacle', current_power_w: 115 }
+    ]
+  },
+  heavy_load: {
+    name: 'วงจรโหลดหนัก (Heavy Load)',
+    total_power_w: 2400,
+    rated_power_w: 6000,
+    devices: [
+      { device_id: 'air_lr', name: 'เครื่องปรับอากาศห้องนั่งเล่น 18000 BTU', room_id: 'living_room', rated_power: 1800, status: 1, category: 'hvac', circuit: 'heavy_load', current_power_w: 1450 },
+      { device_id: 'air_bed', name: 'เครื่องปรับอากาศห้องนอน 9000 BTU', room_id: 'bedroom', rated_power: 1100, status: 1, category: 'hvac', circuit: 'heavy_load', current_power_w: 750 },
+      { device_id: 'pump', name: 'ปั๊มน้ำอัตโนมัติ 350W', room_id: 'service_area', rated_power: 400, status: 1, category: 'pump', circuit: 'heavy_load', current_power_w: 200 }
+    ]
+  }
+};
+
+const DEFAULT_TOU_STATUS: TOUStatusResponse = {
+  current_time: '12:00',
+  is_on_peak: false,
+  current_rate_thb: 3.00,
+  next_period: 'On-Peak',
+  hours_to_next: 2,
+};
+
 export default function TOUCalculatorPage() {
-  const [touStatus, setTouStatus] = useState<TOUStatusResponse | null>(null);
-  const [circuits, setCircuits] = useState<CircuitsResponse | null>(null);
+  const router = useRouter();
+  useEffect(() => {
+    if (!isLoggedIn()) {
+      router.replace('/login');
+    }
+  }, [router]);
+
+  const [touStatus, setTouStatus] = useState<TOUStatusResponse>(DEFAULT_TOU_STATUS);
+  const [circuits, setCircuits] = useState<CircuitsResponse>(DEFAULT_CIRCUITS);
   const [simResult, setSimResult] = useState<TOUSimulateResponse | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [simulating, setSimulating] = useState<boolean>(false);
@@ -59,8 +109,8 @@ export default function TOUCalculatorPage() {
         getTOUStatus().catch(() => null),
         getTOUCircuits().catch(() => null),
       ]);
-      setTouStatus(statusRes);
-      setCircuits(circuitsRes);
+      if (statusRes) setTouStatus(statusRes);
+      if (circuitsRes) setCircuits(circuitsRes);
     } catch {
       showNotice('err', 'ไม่สามารถเชื่อมต่อกับระบบคำนวณ TOU ได้');
     } finally {
@@ -477,9 +527,9 @@ export default function TOUCalculatorPage() {
                 </div>
                 <div className="text-right">
                   <div className="text-base font-black text-amber-400 font-mono">
-                    {circuits?.lighting.total_power_w.toFixed(0) || 0} W
+                    {circuits?.lighting?.total_power_w != null ? circuits.lighting.total_power_w.toFixed(0) : 0} W
                   </div>
-                  <div className="text-[10px] text-slate-500">Rated {circuits?.lighting.rated_power_w.toFixed(0) || 0}W</div>
+                  <div className="text-[10px] text-slate-500">Rated {circuits?.lighting?.rated_power_w != null ? circuits.lighting.rated_power_w.toFixed(0) : 0}W</div>
                 </div>
               </div>
 
@@ -487,13 +537,13 @@ export default function TOUCalculatorPage() {
                 <div
                   className="h-full bg-amber-400 transition-all"
                   style={{
-                    width: `${Math.min(100, ((circuits?.lighting.total_power_w || 0) / Math.max(1, circuits?.lighting.rated_power_w || 1)) * 100)}%`
+                    width: `${Math.min(100, ((circuits?.lighting?.total_power_w || 0) / Math.max(1, circuits?.lighting?.rated_power_w || 1)) * 100)}%`
                   }}
                 />
               </div>
 
               <div className="space-y-1.5 pt-1">
-                {circuits?.lighting.devices.map(d => (
+                {(circuits?.lighting?.devices || []).map(d => (
                   <div key={d.device_id} className="flex items-center justify-between text-[11px] bg-slate-950/60 px-2.5 py-1.5 rounded-lg border border-slate-800/80">
                     <span className="text-slate-300 truncate max-w-[170px]">{d.name}</span>
                     <span className="font-mono text-slate-400">{d.current_power_w.toFixed(0)}W</span>
@@ -517,9 +567,9 @@ export default function TOUCalculatorPage() {
                 </div>
                 <div className="text-right">
                   <div className="text-base font-black text-sky-400 font-mono">
-                    {circuits?.receptacle.total_power_w.toFixed(0) || 0} W
+                    {circuits?.receptacle?.total_power_w != null ? circuits.receptacle.total_power_w.toFixed(0) : 0} W
                   </div>
-                  <div className="text-[10px] text-slate-500">Rated {circuits?.receptacle.rated_power_w.toFixed(0) || 0}W</div>
+                  <div className="text-[10px] text-slate-500">Rated {circuits?.receptacle?.rated_power_w != null ? circuits.receptacle.rated_power_w.toFixed(0) : 0}W</div>
                 </div>
               </div>
 
@@ -527,13 +577,13 @@ export default function TOUCalculatorPage() {
                 <div
                   className="h-full bg-sky-400 transition-all"
                   style={{
-                    width: `${Math.min(100, ((circuits?.receptacle.total_power_w || 0) / Math.max(1, circuits?.receptacle.rated_power_w || 1)) * 100)}%`
+                    width: `${Math.min(100, ((circuits?.receptacle?.total_power_w || 0) / Math.max(1, circuits?.receptacle?.rated_power_w || 1)) * 100)}%`
                   }}
                 />
               </div>
 
               <div className="space-y-1.5 pt-1 max-h-40 overflow-y-auto pr-1">
-                {circuits?.receptacle.devices.slice(0, 4).map(d => (
+                {(circuits?.receptacle?.devices || []).slice(0, 4).map(d => (
                   <div key={d.device_id} className="flex items-center justify-between text-[11px] bg-slate-950/60 px-2.5 py-1.5 rounded-lg border border-slate-800/80">
                     <span className="text-slate-300 truncate max-w-[170px]">{d.name}</span>
                     <span className="font-mono text-slate-400">{d.current_power_w.toFixed(0)}W</span>
@@ -557,9 +607,9 @@ export default function TOUCalculatorPage() {
                 </div>
                 <div className="text-right">
                   <div className="text-base font-black text-rose-400 font-mono">
-                    {circuits?.heavy_load.total_power_w.toFixed(0) || 0} W
+                    {circuits?.heavy_load?.total_power_w != null ? circuits.heavy_load.total_power_w.toFixed(0) : 0} W
                   </div>
-                  <div className="text-[10px] text-slate-500">Rated {circuits?.heavy_load.rated_power_w.toFixed(0) || 0}W</div>
+                  <div className="text-[10px] text-slate-500">Rated {circuits?.heavy_load?.rated_power_w != null ? circuits.heavy_load.rated_power_w.toFixed(0) : 0}W</div>
                 </div>
               </div>
 
@@ -567,13 +617,13 @@ export default function TOUCalculatorPage() {
                 <div
                   className="h-full bg-rose-500 transition-all"
                   style={{
-                    width: `${Math.min(100, ((circuits?.heavy_load.total_power_w || 0) / Math.max(1, circuits?.heavy_load.rated_power_w || 1)) * 100)}%`
+                    width: `${Math.min(100, ((circuits?.heavy_load?.total_power_w || 0) / Math.max(1, circuits?.heavy_load?.rated_power_w || 1)) * 100)}%`
                   }}
                 />
               </div>
 
               <div className="space-y-1.5 pt-1 max-h-40 overflow-y-auto pr-1">
-                {circuits?.heavy_load.devices.map(d => (
+                {(circuits?.heavy_load?.devices || []).map(d => (
                   <div key={d.device_id} className="flex items-center justify-between text-[11px] bg-slate-950/60 px-2.5 py-1.5 rounded-lg border border-slate-800/80">
                     <span className="text-slate-300 truncate max-w-[170px]">{d.name}</span>
                     <span className="font-mono text-rose-300">{d.current_power_w.toFixed(0)}W</span>
@@ -1012,7 +1062,7 @@ export default function TOUCalculatorPage() {
 
                   <div className="space-y-1.5 text-xs">
                     <div className="text-[11px] text-slate-400 font-semibold mb-1">ค่าพลังงานไฟฟ้าฐาน (ขั้นบันได):</div>
-                    {simResult.normal_bill_breakdown?.steps_breakdown.map((step, idx) => (
+                    {simResult.normal_bill_breakdown?.steps_breakdown?.map((step, idx) => (
                       <div key={idx} className="flex justify-between items-center bg-slate-950/50 px-2.5 py-1.5 rounded border border-slate-800/60 text-[11px]">
                         <span className="text-slate-300">
                           {step.label} ({step.kwh.toFixed(1)} หน่วย @ {step.rate.toFixed(4)} ฿)

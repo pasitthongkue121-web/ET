@@ -784,15 +784,44 @@ export interface TOUSimulateResponse {
 }
 
 export async function getTOUStatus(): Promise<TOUStatusResponse> {
-  const res = await fetchWithTimeout(`${API_BASE_URL}/api/tou/status`, { cache: 'no-store' }, 5000);
+  const res = await fetchWithTimeout(`${API_BASE_URL}/api/tou/status`, { cache: 'no-store' }, 12000);
   if (!res.ok) throw new Error(`Failed to fetch TOU status: ${res.status}`);
   return await res.json();
 }
 
 export async function getTOUCircuits(): Promise<CircuitsResponse> {
-  const res = await fetchWithTimeout(`${API_BASE_URL}/api/tou/circuits`, { cache: 'no-store' }, 5000);
+  const res = await fetchWithTimeout(`${API_BASE_URL}/api/tou/circuits`, { cache: 'no-store' }, 12000);
   if (!res.ok) throw new Error(`Failed to fetch circuits: ${res.status}`);
-  return await res.json();
+  const data = await res.json();
+  if (data.lighting && data.receptacle && data.heavy_load) {
+    return data;
+  }
+  if (Array.isArray(data.circuits)) {
+    const light = data.circuits.find((c: any) => c.category_id === 'lighting') || {};
+    const recep = data.circuits.find((c: any) => c.category_id === 'receptacle') || {};
+    const heavy = data.circuits.find((c: any) => c.category_id === 'heavy_load') || {};
+    return {
+      lighting: {
+        name: light.category_name || 'วงจรแสงสว่าง (Lighting)',
+        devices: light.devices || [],
+        total_power_w: light.current_power_w || 0,
+        rated_power_w: light.rated_power_w || 0,
+      },
+      receptacle: {
+        name: recep.category_name || 'วงจรเต้ารับ (Receptacle)',
+        devices: recep.devices || [],
+        total_power_w: recep.current_power_w || 0,
+        rated_power_w: recep.rated_power_w || 0,
+      },
+      heavy_load: {
+        name: heavy.category_name || 'โหลดกำลังสูง (Heavy Load)',
+        devices: heavy.devices || [],
+        total_power_w: heavy.current_power_w || 0,
+        rated_power_w: heavy.rated_power_w || 0,
+      }
+    };
+  }
+  return data;
 }
 
 export async function runTOUSimulation(req: TOUSimulateRequest): Promise<TOUSimulateResponse> {

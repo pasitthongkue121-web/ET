@@ -49,3 +49,5 @@ desktop.ini
 # Render / Cloudflare
 public_url.txt
 bin/cloudflared.exe
+
+scratch/
