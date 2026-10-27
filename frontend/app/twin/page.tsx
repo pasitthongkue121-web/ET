@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
+import { isLoggedIn } from '../../lib/auth';
 import Link from 'next/link';
 import AppShell from '../../components/AppShell';
 import {
@@ -37,6 +39,13 @@ import {
 } from '../../components/Icons';
 
 export default function DigitalTwinPage() {
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!isLoggedIn()) {
+      router.replace('/login');
+    }
+  }, [router]);
   const [state, setState] = useState<DigitalTwinState | null>(null);
   const [rooms, setRooms] = useState<DigitalTwinRoom[]>([]);
   const [selectedDevice, setSelectedDevice] = useState<DigitalTwinDeviceDetail | null>(null);
