@@ -58,7 +58,17 @@ class PipelineSimTransmitRequest(BaseModel):
 @router.get("/status")
 def gsheet_status():
     """Returns Google Sheet connection status and last sync info."""
-    return get_sync_status()
+    try:
+        return get_sync_status()
+    except Exception:
+        return {
+            'connected': False,
+            'web_app_url': '',
+            'last_sync_at': '',
+            'last_row_count': 0,
+            'last_error': '',
+            'cache_ttl_seconds': 60,
+        }
 
 
 @router.post("/connect")
