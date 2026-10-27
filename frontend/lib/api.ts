@@ -61,7 +61,7 @@ async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutM
 
 export async function checkBackendHealth(): Promise<boolean> {
   try {
-    const res = await fetchWithTimeout(`${API_BASE_URL}/health`, {}, 3000);
+    const res = await fetchWithTimeout(`${API_BASE_URL}/health`, {}, 12000);
     return res.ok;
   } catch {
     return false;
