@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
+import { isLoggedIn } from '../../lib/auth';
 import AppShell from '../../components/AppShell';
 import {
   getPredictionForecast,
@@ -31,6 +33,13 @@ import {
 } from '../../components/Icons';
 
 export default function AIForecastPage() {
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!isLoggedIn()) {
+      router.replace('/login');
+    }
+  }, [router]);
   const [forecast, setForecast] = useState<PredictionForecastResponse | null>(null);
   const [models, setModels] = useState<ModelEvaluationMetric[]>([]);
   const [explanation, setExplanation] = useState<PredictionExplanation | null>(null);
@@ -55,6 +64,9 @@ export default function AIForecastPage() {
       setModels(modRes as ModelEvaluationMetric[]);
       if (expRes) setExplanation(expRes);
       setInsights(insRes as InsightDetectionItem[]);
+      if (foreRes || expRes || (modRes && modRes.length > 0)) {
+        setIsBackendOnline(true);
+      }
     } catch (err) {
       console.error('Error loading forecast data:', err);
       setIsBackendOnline(false);
